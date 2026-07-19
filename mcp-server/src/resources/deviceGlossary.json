@@ -1,0 +1,228 @@
+{
+  "drumMachines": [
+    {
+      "id": "machiniste",
+      "name": "Machiniste",
+      "description": "Full-featured drum sampler with multiple channels",
+      "useCase": "When you need custom drum samples or layered percussion"
+    },
+    {
+      "id": "beatbox8",
+      "name": "Beatbox 8",
+      "description": "Classic 8-pad drum machine",
+      "useCase": "Quick beats, electronic drums, starting point for most tracks"
+    },
+    {
+      "id": "beatbox9",
+      "name": "Beatbox 9",
+      "description": "Analog-style 9-pad drum machine",
+      "useCase": "Warmer, vintage drum sounds"
+    }
+  ],
+  "synthesizers": [
+    {
+      "id": "heisenberg",
+      "name": "Heisenberg",
+      "description": "Wavetable synthesizer with filter and envelopes",
+      "useCase": "Leads, pads, complex evolving sounds"
+    },
+    {
+      "id": "pulverisateur",
+      "name": "Pulverisateur",
+      "description": "Virtual-analog synthesizer with LFO",
+      "useCase": "Aggressive leads, wobble bass, EDM sounds"
+    },
+    {
+      "id": "bassline",
+      "name": "Bassline",
+      "description": "Dedicated bass synthesizer",
+      "useCase": "Sub bass, 303-style acid lines, low end foundation"
+    },
+    {
+      "id": "space",
+      "name": "Space",
+      "description": "FM synthesizer with built-in reverb/delay",
+      "useCase": "Atmospheric pads, ambient textures, sci-fi sounds"
+    },
+    {
+      "id": "tonematrix",
+      "name": "ToneMatrix",
+      "description": "Visual grid step sequencer with built-in synth",
+      "useCase": "Melodic patterns, arpeggios, beginners"
+    },
+    {
+      "id": "gakki",
+      "name": "Gakki",
+      "description": "Multi-instrument sample player",
+      "useCase": "Realistic instruments, orchestral sounds, pianos"
+    },
+    {
+      "id": "spitfire-labs",
+      "name": "Spitfire LABS",
+      "description": "High-quality sample-based instruments",
+      "useCase": "Cinematic sounds, strings, textures"
+    }
+  ],
+  "effectsAdvanced": [
+    {
+      "id": "autofilter",
+      "name": "Autofilter",
+      "description": "Automated filter sweeps",
+      "useCase": "Filter automation, buildups, transitions"
+    },
+    {
+      "id": "curve",
+      "name": "Curve",
+      "description": "Parametric EQ with visual curve",
+      "useCase": "Precise frequency shaping, surgical cuts"
+    },
+    {
+      "id": "gravity",
+      "name": "Gravity",
+      "description": "Compressor for dynamics control",
+      "useCase": "Glue mix together, control peaks, punch"
+    },
+    {
+      "id": "quasar",
+      "name": "Quasar",
+      "description": "Plate reverb with decay control",
+      "useCase": "Space, depth, ambient tails"
+    },
+    {
+      "id": "waveshaper",
+      "name": "Wave Shaper",
+      "description": "Distortion and saturation",
+      "useCase": "Warmth, aggression, harmonic excitement"
+    },
+    {
+      "id": "orbit",
+      "name": "Orbit",
+      "description": "Modulation effect",
+      "useCase": "Movement, stereo width, psychedelic effects"
+    },
+    {
+      "id": "quantum",
+      "name": "Quantum",
+      "description": "Multi-band dynamics processor",
+      "useCase": "Mastering, multiband compression"
+    }
+  ],
+  "effectsBasic": [
+    {
+      "id": "chorus",
+      "name": "Chorus",
+      "description": "Classic chorus modulation",
+      "useCase": "Thicken sounds, add shimmer"
+    },
+    {
+      "id": "delay",
+      "name": "Delay",
+      "description": "Echo/delay effect",
+      "useCase": "Rhythmic echoes, space, dub effects"
+    },
+    {
+      "id": "reverb",
+      "name": "Reverb",
+      "description": "Room/hall reverb",
+      "useCase": "Add space and depth to any sound"
+    },
+    {
+      "id": "compressor",
+      "name": "Compressor",
+      "description": "Basic dynamics compression",
+      "useCase": "Control dynamics, add punch"
+    },
+    {
+      "id": "parametric-eq",
+      "name": "Parametric EQ",
+      "description": "3-band parametric equalizer",
+      "useCase": "Basic frequency shaping"
+    },
+    {
+      "id": "flanger",
+      "name": "Flanger",
+      "description": "Flanging modulation effect",
+      "useCase": "Jet/whoosh sounds, movement"
+    },
+    {
+      "id": "phaser",
+      "name": "Phaser",
+      "description": "Phase shifting effect",
+      "useCase": "Swirling, psychedelic textures"
+    },
+    {
+      "id": "crusher",
+      "name": "Crusher",
+      "description": "Bit crusher / sample rate reducer",
+      "useCase": "Lo-fi, retro, glitchy sounds"
+    }
+  ],
+  "tools": {
+    "audio": [
+      {
+        "id": "audiotrack",
+        "name": "AudioTrack",
+        "description": "Audio file playback",
+        "useCase": "Import samples, vocals, recordings"
+      },
+      {
+        "id": "bandsplitter",
+        "name": "BandSplitter",
+        "description": "Split audio into frequency bands",
+        "useCase": "Multiband processing, parallel compression"
+      },
+      {
+        "id": "merger",
+        "name": "Merger",
+        "description": "Combine multiple audio signals",
+        "useCase": "Sum signals together"
+      },
+      {
+        "id": "splitter",
+        "name": "Splitter",
+        "description": "Split one signal to multiple destinations",
+        "useCase": "Parallel processing, send effects"
+      }
+    ],
+    "notes": [
+      {
+        "id": "matrix-arpeggiator",
+        "name": "Matrix Arpeggiator",
+        "description": "Pattern-based arpeggiator",
+        "useCase": "Arpeggios, melodic patterns from chords"
+      },
+      {
+        "id": "notesplitter",
+        "name": "NoteSplitter",
+        "description": "Route MIDI notes by pitch range",
+        "useCase": "Split keyboard, layered instruments"
+      }
+    ],
+    "mixer": [
+      {
+        "id": "centroid",
+        "name": "Centroid",
+        "description": "Main mixer with channel management",
+        "useCase": "Mix all your tracks together"
+      },
+      {
+        "id": "crossfader",
+        "name": "Crossfader",
+        "description": "DJ-style crossfader between two sources",
+        "useCase": "Transitions, DJ mixing"
+      },
+      {
+        "id": "kobolt",
+        "name": "Kobolt",
+        "description": "Sub-mixer / aux channel",
+        "useCase": "Group tracks, submix buses"
+      },
+      {
+        "id": "minimixer",
+        "name": "MiniMixer",
+        "description": "Simple 4-channel mixer",
+        "useCase": "Quick mixing of a few sources"
+      }
+    ]
+  }
+}
