@@ -213,3 +213,73 @@ The cut list exists to **protect the timeline**, not to close the door forever.
 - **Transport/play-pause state.** Still unconfirmed whether the bot can detect this at all — needs a real spike, don't design a feature that assumes an answer either way.
 
 - **Scope creep back into cut features.** Sample-file search and DAW-canvas highlighting were both closed for real technical reasons — don't let them quietly reappear mid-build.
+
+---
+
+## 07 Memory — Creative Intent Persistence
+
+*Remembering what the user wants so suggestions stay relevant.*
+
+### In-Session Memory (Hackathon Target)
+
+| Feature | Difficulty | Notes |
+|---------|------------|-------|
+| Intent capture at start | 🟢 LOW | "Dark, soulful house" — stored in app state |
+| Intent-aware responses | 🟢 LOW | All coach suggestions reference the stated intent |
+| Rejection memory | 🟢 LOW | "User rejected brighter lead" — don't suggest again this session |
+| Decision log | 🟡 MED | Running list of coach suggestions + user responses |
+
+**How it works:**
+```
+User: "I want dark, soulful house that feels cinematic"
+        ↓
+Coach stores: { genre: "house", mood: ["dark", "soulful"], vibe: "cinematic" }
+        ↓
+All suggestions filtered through this lens
+        ↓
+User rejects "add a bright pluck synth"
+        ↓
+Coach stores: { rejected: ["bright pluck"] }
+        ↓
+Coach won't suggest bright sounds again this session
+```
+
+**Storage:** In-memory state only. Dies when session closes. No database needed.
+
+### Cross-Session Memory (Post-Hackathon)
+
+| Feature | Difficulty | Notes |
+|---------|------------|-------|
+| User preference persistence | 🔴 HIGH | Requires database or Mem0 integration |
+| Project history | 🔴 HIGH | "Last time you worked on this track, you were stuck on the chorus" |
+| Style learning | 🔴 HIGH | "You usually prefer analog drums over acoustic" |
+
+**ElevenLabs Memory Status (2026):**
+- Added `MemoryEntrySearchResult` and `ConversationSource` schemas (April 2026)
+- Workflow node override for "agent memory and longer-term WebSocket use cases"
+- **Gap:** No automatic cross-session memory — needs [Mem0](https://docs.mem0.ai/integrations/elevenlabs) or [MemU](https://memu.pro/blog/elevenlabs-agents-voice-memory) integration
+
+**Recommendation:** Skip cross-session for hackathon. In-session memory is enough to demo intent-awareness. Cross-session is a strong post-launch differentiator.
+
+### What We Store (In-Session)
+
+```json
+{
+  "intent": {
+    "genre": "house",
+    "mood": ["dark", "soulful"],
+    "vibe": "cinematic",
+    "reference": null
+  },
+  "decisions": [
+    { "suggestion": "add Beatbox 8 for drums", "accepted": true },
+    { "suggestion": "try a bright pluck lead", "rejected": true }
+  ],
+  "session_state": {
+    "devices_added": ["beatbox8", "heisenberg", "bassline"],
+    "current_stage": "arrangement"
+  }
+}
+```
+
+This feeds into every prompt so the coach never forgets what you're building.
