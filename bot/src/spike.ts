@@ -149,12 +149,21 @@ async function main(): Promise<void> {
     JSON.stringify(changes.map((e) => `${String(e.data.field)}=${String(e.data.value)}`)),
   )
 
-  // --- 4: removal cleanup ---------------------------------------------------
+  // --- 4: removal cleanup + explicit onRemove -------------------------------
+  let onRemoveFired = 0
+  doc.events.onRemove(firstNote, () => {
+    onRemoveFired += 1
+  })
   await doc.modify((t) => t.remove(firstNoteId))
   check(
     "onCreate cleanup fires on note removal",
     of("note-removed").length === 1,
     `${of("note-removed").length} note-removed events`,
+  )
+  check(
+    "explicit onRemove(entity) fires too",
+    onRemoveFired === 1,
+    `${onRemoveFired} onRemove callbacks`,
   )
 
   // --- 5: automation is readable --------------------------------------------
@@ -216,7 +225,75 @@ async function main(): Promise<void> {
     `${notesInRegion.length} notes point to the region's collection`,
   )
 
-  // --- 7: no replay without start() (offline) -------------------------------
+  // --- 7: onPointingTo + sidechain cable field names ------------------------
+  // initialTrigger=false: with the default (true) the callback fires once per
+  // pointer that ALREADY points at the location (notes + the region here).
+  let pointingToFired = 0
+  doc.events.onPointingTo(
+    collection.location,
+    () => {
+      pointingToFired += 1
+    },
+    false,
+  )
+  await doc.modify((t) =>
+    t.create("note", { collection: collection.location, pitch: 72, positionTicks: Ticks.Beat }),
+  )
+  check(
+    "onPointingTo fires when a note joins a collection",
+    pointingToFired === 1,
+    `${pointingToFired} onPointingTo callbacks`,
+  )
+
+  // mixerSideChainCable names its endpoints from/to (not fromSocket/toSocket) -
+  // regression check for the endpoint resolution in normalizeCable.
+  await doc.modify((t) => {
+    const source = t.create("mixerChannel", {})
+    const target = t.create("mixerChannel", {})
+    t.create("mixerSideChainCable", {
+      from: source.fields.sideChainOutput.location,
+      to: target.fields.compressor.fields.sideChainInput.location,
+    })
+  })
+  const sideChainAdd = of("cable-added").find((e) => e.entityType === "mixerSideChainCable")
+  check(
+    "mixerSideChainCable endpoints resolve (from/to fields)",
+    sideChainAdd?.data.fromDeviceType === "mixerChannel" &&
+      sideChainAdd?.data.toDeviceType === "mixerChannel",
+    `from=${String(sideChainAdd?.data.fromDeviceType)} to=${String(sideChainAdd?.data.toDeviceType)}`,
+  )
+
+  // --- 8: terminated pipeline goes fully silent -----------------------------
+  // The SDK keeps invoking onCreate cleanups and un-terminated onUpdate subs
+  // after onCreate.terminate(); the pipeline must gate those out itself.
+  const lateSink: CoachEvent[] = []
+  const secondPipeline = subscribeCoachEvents(doc, (event) => lateSink.push(event))
+  await doc.modify((t) => {
+    t.create("note", { collection: collection.location, pitch: 48 })
+    t.create("automationEvent", {
+      collection: doc.queryEntities.ofTypes("automationCollection").getOne()!.location,
+      positionTicks: Ticks.Beat,
+      value: 0.25,
+    })
+  })
+  const sinkSizeBeforeTerminate = lateSink.length
+  secondPipeline.terminate()
+  await doc.modify((t) => {
+    const lastNote = doc.queryEntities
+      .ofTypes("note")
+      .get()
+      .find((n) => n.fields.pitch.value === 48)!
+    t.remove(lastNote.id)
+    const autoEvent = doc.queryEntities.ofTypes("automationEvent").get()[1]!
+    t.update(autoEvent.fields.value, 0.9)
+  })
+  check(
+    "terminated pipeline emits nothing (removals + automation updates)",
+    lateSink.length === sinkSizeBeforeTerminate && sinkSizeBeforeTerminate > 0,
+    `${lateSink.length - sinkSizeBeforeTerminate} events leaked after terminate()`,
+  )
+
+  // --- 9: no replay without start() (offline) -------------------------------
   let lateEvents = 0
   doc.events.onCreate("note", () => {
     lateEvents += 1

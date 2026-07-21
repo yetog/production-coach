@@ -127,6 +127,7 @@ export interface SessionAnalysis {
     noteRegionCount: number
     audioRegionCount: number
     automationRegionCount: number
+    patternRegionCount: number
     noteCount: number
   }
   cables: {

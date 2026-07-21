@@ -17,6 +17,7 @@ import {
   normalizeDevice,
   normalizeNote,
   normalizeRegion,
+  ticksPerBarOf,
 } from "./normalize.js"
 import type { ReadableDocument } from "./readonly.js"
 import type { CoachEvent, CoachEventKind } from "./types.js"
@@ -40,11 +41,17 @@ export function subscribeCoachEvents(
   sink: EventSink,
   isLive: () => boolean = () => true,
 ): Terminable {
+  // The SDK keeps calling onCreate cleanup closures (and any onUpdate subs
+  // they didn't terminate) after the onCreate Terminable is terminated, so
+  // "unsubscribed" must be enforced on our side of the boundary too.
+  let terminated = false
+
   const emit = (
     kind: CoachEventKind,
     entity: NexusEntity,
     data: Record<string, unknown>,
   ): void => {
+    if (terminated) return
     sink({
       kind,
       tMs: performance.now(),
@@ -56,6 +63,7 @@ export function subscribeCoachEvents(
   }
 
   const noteFieldSubs = new Map<string, Terminable[]>()
+  const autoFieldSubs = new Map<string, Terminable[]>()
 
   const handleNote = (note: NexusEntity<"note">): (() => void) => {
     emit("note-added", note, { ...normalizeNote(doc.queryEntities, note) })
@@ -87,16 +95,17 @@ export function subscribeCoachEvents(
       value: event.fields.value.value,
     })
     emit("automation-added", event, payload())
-    const subs = [
+    autoFieldSubs.set(event.id, [
       doc.events.onUpdate(event.fields.value, () => emit("automation-changed", event, payload()), false),
       doc.events.onUpdate(
         event.fields.positionTicks,
         () => emit("automation-changed", event, payload()),
         false,
       ),
-    ]
+    ])
     return () => {
-      for (const sub of subs) sub.terminate()
+      for (const sub of autoFieldSubs.get(event.id) ?? []) sub.terminate()
+      autoFieldSubs.delete(event.id)
       emit("automation-removed", event, {})
     }
   }
@@ -112,7 +121,9 @@ export function subscribeCoachEvents(
       return () => emit("device-removed", entity, { deviceType: type })
     }
     if (REGION_TYPE_SET.has(type)) {
-      emit("region-added", entity, { ...normalizeRegion(entity) })
+      emit("region-added", entity, {
+        ...normalizeRegion(entity, ticksPerBarOf(doc.queryEntities)),
+      })
       return () => emit("region-removed", entity, { regionType: type })
     }
     if (TRACK_TYPE_SET.has(type)) {
@@ -130,9 +141,12 @@ export function subscribeCoachEvents(
 
   return {
     terminate: () => {
+      terminated = true
       onCreate.terminate()
       for (const subs of noteFieldSubs.values()) for (const sub of subs) sub.terminate()
       noteFieldSubs.clear()
+      for (const subs of autoFieldSubs.values()) for (const sub of subs) sub.terminate()
+      autoFieldSubs.clear()
     },
   }
 }

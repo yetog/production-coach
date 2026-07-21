@@ -1,5 +1,5 @@
 /**
- * Device taxonomy over the NEXUS entity type strings (v0.0.17, 96 entity types).
+ * Device taxonomy over the NEXUS entity type strings (v0.0.17, 86 entity types).
  *
  * "Devices" are the desktop entities a producer adds; regions/tracks/notes/
  * cables/patterns are structural entities handled separately by the pipeline.

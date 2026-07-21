@@ -1,7 +1,7 @@
 # Production Coach - Phase 0 Feasibility Read
 
 > For Aryan & Zay (issue #15). Written after building and running the
-> foundation: read-only bot package (`bot/`), offline spike green 12/12
+> foundation: read-only bot package (`bot/`), offline spike green 17/17
 > (`docs/NEXUS_CAPABILITIES_VERIFIED.md` has the raw evidence).
 > Date: 2026-07-20 · Hackathon deadline: 2026-08-23.
 
@@ -137,8 +137,10 @@ keeping it in scope for the demo script.
 ## 7. What we're deliberately not worrying about
 
 Writes of any kind (out of v1, guard enforces it), audio analysis (not in the
-schema), selection/cursor UX (no such entity), sample catalog (no API),
-cross-session memory (post-hackathon). The mcp-server/ scaffold is vestigial;
+schema), selection/cursor UX (no such entity), sample-catalog features (the
+API actually exists - `client.samples.list()` with full-text search - but the
+feature stays cut for scope; good post-v1 candidate), cross-session memory
+(post-hackathon). The mcp-server/ scaffold is vestigial;
 the bot lives in `bot/` and the MCP wrapper can return post-v1 if we want
 Claude-facing tools.
 

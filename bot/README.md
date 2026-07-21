@@ -15,11 +15,11 @@ pre-1.0 and marked "under heavy development").
 | `src/spike.ts` | Foundation spike, offline half - no auth needed (`npm run spike`) |
 | `src/spike-live.ts` | Foundation spike, live half - needs `.env` (`npm run spike:live`) |
 | `src/index.ts` | The bot: join live session, snapshot, stream events (`npm run dev`) |
-| `src/events.ts` | PUSH pipeline: onCreate/onUpdate/onRemove -> normalized `CoachEvent`s |
+| `src/events.ts` | PUSH pipeline: onCreate/onUpdate + removal cleanups -> normalized `CoachEvent`s |
 | `src/query.ts` | PULL pipeline: `queryEntities` -> `SessionAnalysis` |
 | `src/normalize.ts` | Entity -> `{pitch, timing, velocity, device}` normalization |
 | `src/readonly.ts` | Runtime guard that makes `modify`/`createTransaction` throw |
-| `src/devices.ts` | Device taxonomy over the 96 NEXUS entity types |
+| `src/devices.ts` | Device taxonomy over the 86 NEXUS entity types |
 | `src/auth.ts` | PAT or exported-OAuth-token auth from `.env` |
 
 ## Quick start

@@ -4,9 +4,8 @@
  * On-demand structured snapshot of the whole session via queryEntities.
  * This is what Channel B's session-summarization layer consumes.
  */
-import { Ticks } from "@audiotool/nexus/utils"
 import { deviceCategory, isDeviceType } from "./devices.js"
-import { displayNameOf, normalizeCable } from "./normalize.js"
+import { displayNameOf, normalizeCable, ticksPerBarOf } from "./normalize.js"
 import type { ReadableDocument } from "./readonly.js"
 import type { SessionAnalysis } from "./types.js"
 
@@ -49,6 +48,7 @@ export function analyzeSession(doc: ReadableDocument): SessionAnalysis {
   }
 
   const config = query.ofTypes("config").getOne()
+  const ticksPerBar = ticksPerBarOf(query)
   const project: SessionAnalysis["project"] = {
     bpm: config?.fields.tempoBpm.value,
     signature:
@@ -58,17 +58,18 @@ export function analyzeSession(doc: ReadableDocument): SessionAnalysis {
     baseFrequencyHz: config?.fields.baseFrequencyHz.value,
     durationTicks: config?.fields.durationTicks.value,
     lengthBars:
-      config === undefined ? 0 : config.fields.durationTicks.value / Ticks.SemiBreve,
+      config === undefined ? 0 : config.fields.durationTicks.value / ticksPerBar,
   }
 
   const noteRegions = query.ofTypes("noteRegion").get()
   const audioRegions = query.ofTypes("audioRegion").get()
   const automationRegions = query.ofTypes("automationRegion").get()
+  const patternRegions = query.ofTypes("patternRegion").get()
   const notes = query.ofTypes("note").get()
 
-  // Arrangement length: rightmost region end, in 4/4 bars.
+  // Arrangement length: rightmost region end, in bars at the project signature.
   let lastTick = 0
-  for (const region of [...noteRegions, ...audioRegions, ...automationRegions]) {
+  for (const region of [...noteRegions, ...audioRegions, ...automationRegions, ...patternRegions]) {
     const struct = region.fields.region
     lastTick = Math.max(
       lastTick,
@@ -81,10 +82,11 @@ export function analyzeSession(doc: ReadableDocument): SessionAnalysis {
     hasAudioRegions: audioRegions.length > 0,
     hasAutomation:
       automationRegions.length > 0 || (entityCounts["automationEvent"] ?? 0) > 0,
-    lengthBars: lastTick / Ticks.SemiBreve,
+    lengthBars: lastTick / ticksPerBar,
     noteRegionCount: noteRegions.length,
     audioRegionCount: audioRegions.length,
     automationRegionCount: automationRegions.length,
+    patternRegionCount: patternRegions.length,
     noteCount: notes.length,
   }
 
@@ -147,7 +149,9 @@ function recommend(
   if (devices.drums.length === 0) recommendations.push("No drum machine yet - rhythm section is empty")
   if (devices.bass.length === 0) recommendations.push("No bass device yet - low end is missing")
   if (devices.synths.length === 0) recommendations.push("No synth yet - no harmonic content")
-  if (!arrangement.hasNoteRegions) recommendations.push("No note regions on the timeline yet")
+  if (!arrangement.hasNoteRegions && arrangement.patternRegionCount === 0) {
+    recommendations.push("Nothing on the timeline yet - no note or pattern regions")
+  }
   if (!arrangement.hasAutomation && arrangement.lengthBars > 8) {
     recommendations.push("No automation - consider movement over time")
   }

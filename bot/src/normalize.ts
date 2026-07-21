@@ -72,8 +72,21 @@ export function normalizeDevice(entity: NexusEntity): DeviceData {
   }
 }
 
+/**
+ * Ticks per bar at the project's time signature (from the config entity);
+ * falls back to 4/4 (= Ticks.SemiBreve) when no config exists yet.
+ */
+export function ticksPerBarOf(query: EntityQuery): number {
+  const config = query.ofTypes("config").getOne()
+  if (config === undefined) return Ticks.SemiBreve
+  return (
+    (Ticks.SemiBreve * config.fields.signatureNumerator.value) /
+    config.fields.signatureDenominator.value
+  )
+}
+
 /** Regions nest their timing in a `region` struct field (noteRegion/audioRegion/...). */
-export function normalizeRegion(entity: NexusEntity): RegionData {
+export function normalizeRegion(entity: NexusEntity, ticksPerBar: number = Ticks.SemiBreve): RegionData {
   const fields = entity.fields as Record<string, unknown>
   const regionStruct = fields["region"] as
     | { fields?: Record<string, { value?: unknown } | undefined> }
@@ -93,22 +106,30 @@ export function normalizeRegion(entity: NexusEntity): RegionData {
     displayName: str("displayName"),
     positionTicks,
     durationTicks,
-    positionBars: positionTicks === undefined ? undefined : positionTicks / Ticks.SemiBreve,
-    durationBars: durationTicks === undefined ? undefined : durationTicks / Ticks.SemiBreve,
+    positionBars: positionTicks === undefined ? undefined : positionTicks / ticksPerBar,
+    durationBars: durationTicks === undefined ? undefined : durationTicks / ticksPerBar,
   }
 }
 
-/** Resolve cable endpoints back to the devices whose sockets they connect. */
+/**
+ * Resolve cable endpoints back to the devices whose sockets they connect.
+ * Desktop cables name their endpoints fromSocket/toSocket; mixerSideChainCable
+ * names them from/to.
+ */
 export function normalizeCable(query: EntityQuery, entity: NexusEntity): CableData {
   const fields = entity.fields as Record<string, { value?: { entityId?: string } } | undefined>
-  const endpoint = (socketField: string): { id?: string; type?: string } => {
-    const entityId = fields[socketField]?.value?.entityId
-    if (entityId === undefined) return {}
-    const device = query.getEntity(entityId)
-    return { id: entityId, type: device?.entityType }
+  const endpoint = (...fieldNames: string[]): { id?: string; type?: string } => {
+    for (const name of fieldNames) {
+      const entityId = fields[name]?.value?.entityId
+      if (entityId !== undefined && entityId !== "") {
+        const device = query.getEntity(entityId)
+        return { id: entityId, type: device?.entityType }
+      }
+    }
+    return {}
   }
-  const from = endpoint("fromSocket")
-  const to = endpoint("toSocket")
+  const from = endpoint("fromSocket", "from")
+  const to = endpoint("toSocket", "to")
   return {
     cableType: entity.entityType as CableData["cableType"],
     fromDeviceId: from.id,

@@ -2,7 +2,7 @@
 
 > Foundation spike results (issue #14). Everything below was verified against
 > the **installed** `@audiotool/nexus@0.0.17` package (shipped `.d.ts` files)
-> and a **running** spike (`bot/src/spike.ts`, offline document, 12/12 checks
+> and a **running** spike (`bot/src/spike.ts`, offline document, 17/17 checks
 > green), not against docs prose. Live-session verification is staged and
 > pending credentials - see "Open questions" at the bottom.
 >
@@ -13,7 +13,7 @@
 ## The headline answer
 
 **Yes: `onCreate` fires for individual notes.** `"note"` is a first-class
-entity type (one of 96). Creating 4 notes in one transaction produced 4
+entity type (one of 86). Creating 4 notes in one transaction produced 4
 distinct `note-added` events, each carrying pitch, timing, and velocity, each
 resolvable to the device that plays it. Field edits (`pitch`, `velocity`,
 `positionTicks`, `durationTicks`) fire per-field `onUpdate` callbacks, and
@@ -66,7 +66,7 @@ nexus.events.onCreate("note", (n) => { ...; return () => {/* fires on removal */
 nexus.events.onCreate("*", (entity) => { ... })            // every entity type
 nexus.events.onUpdate(note.fields.pitch, (v) => { ... }, false) // per-field
 nexus.events.onRemove(entity, cb)
-nexus.events.onPointingTo(location, cb)                    // pointer tracking
+nexus.events.onPointingTo(location, cb, false)             // pointer tracking
 // all return { terminate(): void }
 ```
 
@@ -74,8 +74,14 @@ nexus.events.onPointingTo(location, cb)                    // pointer tracking
   replays `onCreate` for every existing entity (verified in the .d.ts contract;
   the spike confirmed the inverse - late listeners on an offline doc get no
   replay).
-- `onUpdate`'s third arg `initialTrigger` fires the callback immediately with
-  the current value - pass `false` for edge-triggered behavior.
+- `onUpdate` and `onPointingTo` take an `initialTrigger` arg that fires the
+  callback immediately for the current value / every existing pointer - pass
+  `false` for edge-triggered behavior (spike-verified: with the default, a
+  fresh `onPointingTo` on a collection fired once per existing note + region).
+- Terminating the `onCreate` Terminable does NOT stop cleanup closures or
+  still-subscribed `onUpdate`s from firing later (spike-verified). Our
+  pipeline gates its sink on its own terminated flag for this reason - anyone
+  hand-rolling subscriptions must do the same.
 
 ### Queries (PULL) - all verified in the spike
 
@@ -103,19 +109,24 @@ floating around in older notes does not exist in 0.0.17.
 | Device types + params (displayName, position, gain, envelopes, ...) | 50+ device entity types | device-added events + snapshot classification |
 | Timeline regions (position/duration/loop, nested `region` struct) | `noteRegion`, `audioRegion`, `automationRegion`, `patternRegion` | region-added + bar-length math |
 | Automation | `automationTrack` (automatedParameter -> any param location), `automationCollection`, `automationEvent` {positionTicks, value} | automation-added event |
-| Cable routing | `desktopAudioCable`/`desktopNoteCable`/`mixerSideChainCable` {fromSocket, toSocket} - socket locations resolve to device ids | cable endpoints resolved to devices |
+| Cable routing | `desktopAudioCable`/`desktopNoteCable` {fromSocket, toSocket}; `mixerSideChainCable` names them {from, to} - socket locations resolve to device/strip ids | both cable kinds' endpoints resolved in the spike |
 | Project config: BPM, time signature, base frequency, song length | `config` entity: tempoBpm, signatureNumerator/Denominator, baseFrequencyHz, durationTicks | bpm=128, signature=4/4 read back |
 | Musical time | `Ticks` from `@audiotool/nexus/utils`: Beat=3840, SemiBreve=15360, SemiQuaver=960; `ticksToSeconds(ticks, bpm)` | used for beats/bars math |
 
-### Confirmed NOT readable (absent from the 96-type schema)
+### Confirmed NOT readable (absent from the 86-type schema)
 
 - Audio waveforms / rendered audio (symbolic data only; `sample` entities +
   `client.samples.download()` exist but that's file access, not live audio)
 - Play/pause & transport state - no such entity
 - Selection / cursor / UI state - no such entity
-- Sample catalog browsing/search - no catalog API in the SDK
 
-Full 96-type list: see `bot/node_modules/@audiotool/nexus/dist/gen/audiotool/document/v1/utils/types.d.ts`
+Correction to earlier notes: a sample **catalog API does exist** -
+`client.samples.list()` takes full-text `textSearch` (with boolean operators),
+a CEL `filter` (name/owner/bpm/tags/...), ordering and pagination (see
+`dist/api/sample-api.d.ts`). The "find me a sample" feature stays cut for v1
+as a product-scope decision, not an API gap.
+
+Full 86-type list: see `bot/node_modules/@audiotool/nexus/dist/gen/audiotool/document/v1/utils/types.d.ts`
 or `bot/src/devices.ts` for our device taxonomy over it.
 
 ---
