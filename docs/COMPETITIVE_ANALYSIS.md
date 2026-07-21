@@ -182,6 +182,92 @@ Audiotool has no mobile presence. This is both a gap and an opportunity — mobi
 
 ---
 
+## Mobile Strategy
+
+### Audiotool 3.0 Mobile Status
+
+From the [Audiotool 3.0 launch](https://musictech.com/news/gear/audiotool-3-nexus/):
+> "Real-time collaboration to browsers and tablets, with native mobile apps promised soon."
+
+**Current state:** Tablet support live, native mobile apps "coming soon."
+
+### Mobile Development Options
+
+| Option | Description | Pros | Cons |
+|--------|-------------|------|------|
+| **PWA** | Wrap existing web app as installable | Single codebase, fast to ship | Audio latency, limited native features |
+| **Companion App** | Mobile app for specific features, syncs with browser | Focused scope, lighter build | Not a full DAW |
+| **Native Apps** | Full iOS/Android builds | Best performance | Expensive, 2 codebases |
+
+### Production Coach Mobile Strategy
+
+Since Audiotool is building the mobile DAW, Production Coach should focus on **companion features**:
+
+#### 1. Mobile Coaching UI
+
+```
+┌─────────────────────────────────────┐
+│  Production Coach Mobile            │
+├─────────────────────────────────────┤
+│  🎵 Current project: "Dark House"   │
+│                                     │
+│  📊 Status: Arrangement stage       │
+│                                     │
+│  💡 Next step: Add transition       │
+│     before the drop                 │
+│                                     │
+│  [Open in Audiotool]  [Get Tips]    │
+└─────────────────────────────────────┘
+```
+
+#### 2. Push Notifications
+
+| Notification Type | Example |
+|-------------------|---------|
+| **Engagement** | "You haven't worked on 'Dark House' in 3 days" |
+| **Coaching** | "Your track needs low end — want tips?" |
+| **Progress** | "You're 70% through arrangement stage" |
+
+#### 3. Voice Capture
+
+- Record ideas on the go via phone mic
+- AI transcribes into production notes
+- Syncs to project when browser session opens
+
+#### 4. Offline Review
+
+- Listen to project renders on mobile
+- Add timestamped notes
+- Review coaching suggestions
+
+### Technical Approach
+
+**Recommended:** React Native or Flutter + NEXUS SDK
+
+```
+Mobile App ←→ NEXUS SDK ←→ Audiotool Cloud ←→ Browser DAW
+```
+
+**Key questions for Mirta call:**
+1. "When are native mobile apps launching?"
+2. "Will NEXUS SDK work on mobile?"
+3. "Can plugins like Production Coach run on mobile?"
+
+If NEXUS SDK supports mobile, Production Coach could be the **first mobile coaching app** for Audiotool.
+
+### PWA Reference: openDAW
+
+[openDAW](https://github.com/andremichelle/openDAW) is building a fully open-source browser DAW with PWA support for 2026. Their approach:
+- Service Worker for offline caching
+- Web App Manifest for installability
+- MediaSession API for lock screen controls
+
+This could be a reference architecture if Audiotool explores PWA.
+
+Sources: [MusicTech - Audiotool 3.0](https://musictech.com/news/gear/audiotool-3-nexus/), [openDAW GitHub](https://github.com/andremichelle/openDAW), [PWA Capabilities 2026](https://progressier.com/pwa-capabilities)
+
+---
+
 ## Recommendations for Founders Meeting
 
 **Don't pitch these directly** — plant seeds:
