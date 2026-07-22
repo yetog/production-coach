@@ -1,0 +1,27 @@
+{
+  "name": "production-coach-bot",
+  "version": "0.1.0",
+  "description": "Read-only NEXUS bot for Production Coach - joins a live Audiotool session and streams normalized read events",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "spike": "tsx src/spike.ts",
+    "spike:live": "tsx src/spike-live.ts",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@audiotool/nexus": "0.0.17"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT"
+}
