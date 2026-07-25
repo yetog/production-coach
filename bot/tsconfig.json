@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    // Not NodeNext (mcp-server style): @audiotool/nexus 0.0.17 ships .d.ts
+    // files with extensionless relative imports, which NodeNext rejects -
+    // its types only resolve under bundler resolution. Runtime JS is a
+    // proper ESM bundle, so Node still runs the emitted output fine.
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022"],
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}
