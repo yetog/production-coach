@@ -1,11 +1,45 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import type { ChatMessage, CoachAction, ChecklistItem, CoachState, SessionState } from '@/types'
 import { DEFAULT_CHECKLIST } from '@/types'
+
+// Storage keys
+const STORAGE_KEYS = {
+  messages: 'production-coach:messages',
+  goal: 'production-coach:goal',
+  checklist: 'production-coach:checklist',
+}
 
 // Dr. Zay personality
 const DR_ZAY_INTRO = `Yo, what's good! I'm Dr. Zay, your production coach. I'm not here to make music FOR you - I'm here to help you level up YOUR skills. Tell me what vibe you're going for, and let's get to work. No shortcuts, just growth.`
 
 const DR_ZAY_REFUSE = `Nah, I'm not gonna do that for you. That's YOUR job. But let me show you HOW to do it - that's where the real learning happens. What do you want to understand?`
+
+// Helpers for localStorage
+function loadFromStorage<T>(key: string, fallback: T): T {
+  try {
+    const stored = localStorage.getItem(key)
+    if (!stored) return fallback
+    const parsed = JSON.parse(stored)
+    // Convert timestamp strings back to Date objects for messages
+    if (key === STORAGE_KEYS.messages && Array.isArray(parsed)) {
+      return parsed.map((msg: any) => ({
+        ...msg,
+        timestamp: new Date(msg.timestamp),
+      })) as T
+    }
+    return parsed
+  } catch {
+    return fallback
+  }
+}
+
+function saveToStorage<T>(key: string, value: T): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(value))
+  } catch {
+    // Storage full or unavailable
+  }
+}
 
 interface UseCoachOptions {
   session: SessionState
@@ -13,18 +47,45 @@ interface UseCoachOptions {
 }
 
 export function useCoach({ session, onAddDevice }: UseCoachOptions) {
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: 'intro',
-      role: 'coach',
-      content: DR_ZAY_INTRO,
-      timestamp: new Date(),
-    },
-  ])
-  const [checklist, setChecklist] = useState<ChecklistItem[]>(DEFAULT_CHECKLIST)
-  const [goal, setGoal] = useState<string | null>(null)
+  // Initialize state from localStorage
+  const [messages, setMessages] = useState<ChatMessage[]>(() => {
+    const stored = loadFromStorage<ChatMessage[]>(STORAGE_KEYS.messages, [])
+    if (stored.length === 0) {
+      return [
+        {
+          id: 'intro',
+          role: 'coach',
+          content: DR_ZAY_INTRO,
+          timestamp: new Date(),
+        },
+      ]
+    }
+    return stored
+  })
+
+  const [checklist, setChecklist] = useState<ChecklistItem[]>(() =>
+    loadFromStorage(STORAGE_KEYS.checklist, DEFAULT_CHECKLIST)
+  )
+
+  const [goal, setGoal] = useState<string | null>(() =>
+    loadFromStorage(STORAGE_KEYS.goal, null)
+  )
+
   const [state, setState] = useState<CoachState>('idle')
   const [isLoading, setIsLoading] = useState(false)
+
+  // Persist state changes
+  useEffect(() => {
+    saveToStorage(STORAGE_KEYS.messages, messages)
+  }, [messages])
+
+  useEffect(() => {
+    saveToStorage(STORAGE_KEYS.checklist, checklist)
+  }, [checklist])
+
+  useEffect(() => {
+    saveToStorage(STORAGE_KEYS.goal, goal)
+  }, [goal])
 
   // Set production goal
   const setProductionGoal = useCallback((newGoal: string) => {
@@ -97,6 +158,26 @@ export function useCoach({ session, onAddDevice }: UseCoachOptions) {
           params: { deviceType: 'heisenberg', displayName: 'Lead Synth' },
         },
       }
+    } else if (/start|begin|first|how do i/i.test(content)) {
+      response = {
+        id: `coach-${Date.now()}`,
+        role: 'coach',
+        content: `Great question! Here's my approach: start with the drums - they're the heartbeat. Pick a tempo that matches your vibe (${goal ? `for "${goal}", I'd say 90-100 BPM` : '90-120 BPM is a good range'}). Once you've got a basic loop going, we'll layer in the other elements. Want me to help you add a drum machine?`,
+        timestamp: new Date(),
+        action: {
+          type: 'add_device',
+          label: 'Add Beatbox 8',
+          description: 'Add a drum machine to start',
+          params: { deviceType: 'beatbox8', displayName: 'Drums' },
+        },
+      }
+    } else if (/muddy|unclear|mix/i.test(content)) {
+      response = {
+        id: `coach-${Date.now()}`,
+        role: 'coach',
+        content: `Muddy mix? Classic problem. Here's what usually causes it:\n\n1. **Too much low-end** - Cut frequencies below 80Hz on everything except kick and bass\n2. **Competing frequencies** - If kick and bass are fighting, sidechain the bass to duck when the kick hits\n3. **No space** - Pan elements, use different octaves, give each sound its own lane\n\nWhich of these do you want to tackle first?`,
+        timestamp: new Date(),
+      }
     } else {
       // Generic helpful response
       response = {
@@ -110,7 +191,7 @@ export function useCoach({ session, onAddDevice }: UseCoachOptions) {
     setMessages(prev => [...prev, response])
     setIsLoading(false)
     setState('idle')
-  }, [session.devices.length])
+  }, [session.devices.length, goal])
 
   // Apply an action
   const applyAction = useCallback(async (action: CoachAction) => {
@@ -161,6 +242,23 @@ export function useCoach({ session, onAddDevice }: UseCoachOptions) {
     })
   }, [])
 
+  // Clear conversation (for reset functionality)
+  const clearConversation = useCallback(() => {
+    setMessages([
+      {
+        id: 'intro',
+        role: 'coach',
+        content: DR_ZAY_INTRO,
+        timestamp: new Date(),
+      },
+    ])
+    setGoal(null)
+    setChecklist(DEFAULT_CHECKLIST)
+    localStorage.removeItem(STORAGE_KEYS.messages)
+    localStorage.removeItem(STORAGE_KEYS.goal)
+    localStorage.removeItem(STORAGE_KEYS.checklist)
+  }, [])
+
   return {
     messages,
     checklist,
@@ -171,5 +269,6 @@ export function useCoach({ session, onAddDevice }: UseCoachOptions) {
     sendMessage,
     applyAction,
     toggleChecklistItem,
+    clearConversation,
   }
 }
