@@ -1,4 +1,4 @@
-import { Music, Drum, Piano, Radio } from 'lucide-react'
+import { Music, Drum, Piano, Radio, Wifi, WifiOff } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { SessionState, DeviceInfo } from '@/types'
 
@@ -34,40 +34,49 @@ function DeviceChip({ device }: { device: DeviceInfo }) {
 export function SessionStatus({ session, className }: SessionStatusProps) {
   if (!session.connected) {
     return (
-      <div className={cn('p-4 bg-card rounded-lg border border-border', className)}>
-        <div className="text-center text-muted-foreground">
-          <Radio className="w-8 h-8 mx-auto mb-2 opacity-50" />
-          <p className="text-sm">Not connected to Audiotool</p>
-          <p className="text-xs mt-1">Open a project to get started</p>
+      <div className={cn('space-y-3', className)}>
+        <div className="flex items-center gap-2 text-sm">
+          <WifiOff className="w-4 h-4 text-muted-foreground" />
+          <span className="text-muted-foreground">Not connected</span>
         </div>
+        <p className="text-xs text-muted-foreground">
+          Open a project in Audiotool to connect
+        </p>
       </div>
     )
   }
 
   return (
-    <div className={cn('p-4 bg-card rounded-lg border border-border space-y-4', className)}>
-      <h3 className="text-sm font-medium text-foreground">Session</h3>
+    <div className={cn('space-y-4', className)}>
+      {/* Connection status */}
+      <div className="flex items-center gap-2">
+        <div className="relative">
+          <Wifi className="w-4 h-4 text-green-400" />
+          <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+        </div>
+        <span className="text-sm text-foreground">Connected</span>
+      </div>
 
       {/* BPM & Key */}
-      <div className="flex gap-4 text-sm">
+      <div className="flex gap-4">
         {session.bpm && (
-          <div>
-            <span className="text-muted-foreground">BPM: </span>
-            <span className="text-foreground font-mono">{session.bpm}</span>
+          <div className="px-3 py-2 rounded-lg bg-secondary/50 border border-border/50">
+            <span className="text-xs text-muted-foreground">BPM</span>
+            <p className="text-lg font-mono text-foreground">{session.bpm}</p>
           </div>
         )}
         {session.key && (
-          <div>
-            <span className="text-muted-foreground">Key: </span>
-            <span className="text-foreground font-mono">{session.key}</span>
+          <div className="px-3 py-2 rounded-lg bg-secondary/50 border border-border/50">
+            <span className="text-xs text-muted-foreground">Key</span>
+            <p className="text-lg font-mono text-foreground">{session.key}</p>
           </div>
         )}
       </div>
 
       {/* Devices */}
       {session.devices.length > 0 && (
-        <div>
-          <p className="text-xs text-muted-foreground mb-2">
+        <div className="space-y-2">
+          <p className="text-xs text-muted-foreground">
             Devices ({session.devices.length})
           </p>
           <div className="flex flex-wrap gap-2">
@@ -79,18 +88,17 @@ export function SessionStatus({ session, className }: SessionStatusProps) {
       )}
 
       {session.devices.length === 0 && (
-        <p className="text-xs text-muted-foreground">
-          No devices yet. Ask me what to add!
+        <p className="text-xs text-muted-foreground italic">
+          No devices yet - let's add some!
         </p>
       )}
 
       {/* Regions */}
       {session.regions.length > 0 && (
-        <div>
-          <p className="text-xs text-muted-foreground">
-            {session.regions.length} region{session.regions.length !== 1 ? 's' : ''} in timeline
-          </p>
-        </div>
+        <p className="text-xs text-muted-foreground">
+          {session.regions.length} region{session.regions.length !== 1 ? 's' : ''} on
+          timeline
+        </p>
       )}
     </div>
   )

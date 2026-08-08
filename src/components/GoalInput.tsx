@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Sparkles, ArrowRight } from 'lucide-react'
+import { Sparkles, ArrowRight, Pencil } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface GoalInputProps {
@@ -9,10 +9,10 @@ interface GoalInputProps {
 }
 
 const suggestions = [
-  'Dark, soulful house that feels cinematic',
-  'Lo-fi hip hop with jazzy chords',
-  'Hard-hitting trap with melodic elements',
-  'Ambient electronic with evolving textures',
+  'Dark, soulful house',
+  'Lo-fi hip hop',
+  'Hard trap beats',
+  'Ambient electronic',
 ]
 
 export function GoalInput({ onSubmit, initialGoal, className }: GoalInputProps) {
@@ -32,55 +32,62 @@ export function GoalInput({ onSubmit, initialGoal, className }: GoalInputProps) 
       <button
         onClick={() => setIsExpanded(true)}
         className={cn(
-          'w-full p-4 bg-card rounded-lg border border-border',
-          'text-left hover:border-primary/50 transition-colors',
+          'w-full p-4 rounded-xl text-left group',
+          'bg-gradient-to-r from-cyan-500/10 to-purple-500/10',
+          'border border-cyan-500/20',
+          'hover:border-cyan-500/40 transition-all duration-200',
           className
         )}
       >
-        <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-          <Sparkles className="w-3 h-3" />
-          <span>Your Goal</span>
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2 text-xs text-cyan-400">
+            <Sparkles className="w-3 h-3" />
+            <span>Your Vibe</span>
+          </div>
+          <Pencil className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
         </div>
-        <p className="text-sm text-foreground">{initialGoal}</p>
+        <p className="text-sm text-foreground font-medium">{initialGoal}</p>
       </button>
     )
   }
 
   return (
-    <div className={cn('p-4 bg-card rounded-lg border border-border', className)}>
-      <div className="flex items-center gap-2 mb-3">
-        <Sparkles className="w-4 h-4 text-primary" />
-        <h3 className="text-sm font-medium text-foreground">What do you want to create?</h3>
+    <div className={cn('space-y-4', className)}>
+      <div className="flex items-center gap-2">
+        <Sparkles className="w-4 h-4 text-cyan-400" />
+        <h3 className="text-sm font-medium text-foreground">What's the vibe?</h3>
       </div>
 
-      <form onSubmit={handleSubmit}>
+      <form onSubmit={handleSubmit} className="space-y-3">
         <textarea
           value={goal}
           onChange={(e) => setGoal(e.target.value)}
-          placeholder="Describe the vibe, genre, or mood..."
+          placeholder="Describe the sound you're going for..."
           rows={2}
           className={cn(
-            'w-full px-3 py-2 text-sm rounded-md resize-none',
-            'bg-input text-foreground placeholder:text-muted-foreground',
-            'border border-border focus:border-primary focus:outline-none',
-            'transition-colors'
+            'w-full px-4 py-3 text-sm rounded-xl resize-none',
+            'bg-secondary/50 text-foreground placeholder:text-muted-foreground',
+            'border border-border/50 focus:border-cyan-500/50 focus:outline-none',
+            'transition-all duration-200'
           )}
         />
 
-        {/* Suggestions */}
-        <div className="flex flex-wrap gap-2 mt-3">
+        {/* Quick suggestions */}
+        <div className="flex flex-wrap gap-2">
           {suggestions.map((suggestion) => (
             <button
               key={suggestion}
               type="button"
               onClick={() => setGoal(suggestion)}
               className={cn(
-                'px-2 py-1 text-xs rounded-md',
-                'bg-secondary text-secondary-foreground',
-                'hover:bg-secondary/80 transition-colors'
+                'px-3 py-1.5 text-xs rounded-lg',
+                'bg-secondary/50 text-muted-foreground',
+                'border border-border/50',
+                'hover:border-cyan-500/30 hover:text-foreground',
+                'transition-all duration-200'
               )}
             >
-              {suggestion.slice(0, 25)}...
+              {suggestion}
             </button>
           ))}
         </div>
@@ -89,13 +96,16 @@ export function GoalInput({ onSubmit, initialGoal, className }: GoalInputProps) 
           type="submit"
           disabled={!goal.trim()}
           className={cn(
-            'w-full mt-3 px-4 py-2 rounded-md',
-            'bg-primary text-primary-foreground',
-            'hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed',
-            'transition-colors flex items-center justify-center gap-2'
+            'w-full px-4 py-3 rounded-xl',
+            'bg-gradient-to-r from-cyan-500 to-purple-500',
+            'text-white font-medium text-sm',
+            'hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed',
+            'transition-all duration-200',
+            'flex items-center justify-center gap-2',
+            'shadow-lg shadow-cyan-500/20'
           )}
         >
-          <span>Start Coaching</span>
+          <span>Let's Go</span>
           <ArrowRight className="w-4 h-4" />
         </button>
       </form>

@@ -1,14 +1,8 @@
 import { useState } from 'react'
-import { Settings } from 'lucide-react'
-import { CoachDot } from '@/components/CoachDot'
 import { ChatPanel } from '@/components/ChatPanel'
-import { SessionStatus } from '@/components/SessionStatus'
-import { Checklist } from '@/components/Checklist'
-import { ChattinessSlider } from '@/components/ChattinessSlider'
-import { GoalInput } from '@/components/GoalInput'
+import { ControlsSidebar } from '@/components/ControlsSidebar'
 import { useNexus } from '@/hooks/useNexus'
 import { useCoach } from '@/hooks/useCoach'
-import { cn } from '@/lib/utils'
 import type { CoachSettings } from '@/types'
 
 function App() {
@@ -30,74 +24,55 @@ function App() {
     voiceEnabled: false,
     persona: 'dr-zay',
   })
-  const [showSettings, setShowSettings] = useState(false)
 
   return (
-    <div className="min-h-screen bg-background p-4">
-      <div className="max-w-6xl mx-auto space-y-4">
-        {/* Header */}
-        <header className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <h1 className="text-xl font-semibold text-foreground">
-              Production Coach
-            </h1>
-            <CoachDot state={state} />
-          </div>
+    <div className="min-h-screen bg-background">
+      {/* Gradient background effects */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-40 -right-40 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl" />
+        <div className="absolute top-1/2 -left-40 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl" />
+        <div className="absolute -bottom-40 right-1/3 w-96 h-96 bg-pink-500/10 rounded-full blur-3xl" />
+      </div>
 
-          <button
-            onClick={() => setShowSettings(!showSettings)}
-            className={cn(
-              'p-2 rounded-md',
-              'hover:bg-secondary transition-colors',
-              showSettings && 'bg-secondary'
-            )}
-          >
-            <Settings className="w-5 h-5 text-muted-foreground" />
-          </button>
-        </header>
+      {/* Main layout */}
+      <div className="relative z-10 h-screen flex p-4 gap-4">
+        {/* Sidebar */}
+        <ControlsSidebar
+          goal={goal}
+          checklist={checklist}
+          session={session}
+          settings={settings}
+          onSetGoal={setProductionGoal}
+          onToggleItem={toggleChecklistItem}
+          onSettingsChange={setSettings}
+        />
 
-        {/* Settings Panel (collapsible) */}
-        {showSettings && (
-          <ChattinessSlider
-            value={settings.chattiness}
-            onChange={(chattiness) => setSettings(prev => ({ ...prev, chattiness }))}
+        {/* Chat - Hero */}
+        <div className="flex-1 flex flex-col min-w-0">
+          <ChatPanel
+            messages={messages}
+            onSendMessage={sendMessage}
+            onApplyAction={applyAction}
+            isLoading={isLoading}
+            state={state}
           />
-        )}
 
-        {/* Main Content */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* Left Column: Goal + Checklist + Session */}
-          <div className="space-y-4">
-            <GoalInput
-              onSubmit={setProductionGoal}
-              initialGoal={goal || undefined}
-            />
-
-            {goal && (
-              <Checklist
-                items={checklist}
-                onItemClick={(item) => toggleChecklistItem(item.id)}
-              />
-            )}
-
-            <SessionStatus session={session} />
-          </div>
-
-          {/* Right Column: Chat (spans 2 columns on large screens) */}
-          <div className="lg:col-span-2 h-[600px]">
-            <ChatPanel
-              messages={messages}
-              onSendMessage={sendMessage}
-              onApplyAction={applyAction}
-              isLoading={isLoading}
-            />
-          </div>
+          {/* Footer */}
+          <footer className="text-center text-xs text-muted-foreground py-3">
+            <p>
+              Production Coach for{' '}
+              <a
+                href="https://audiotool.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-cyan-400 hover:underline"
+              >
+                Audiotool
+              </a>{' '}
+              | NEXUS Hackathon 2026
+            </p>
+          </footer>
         </div>
-
-        {/* Footer */}
-        <footer className="text-center text-xs text-muted-foreground pt-4">
-          <p>Production Coach for Audiotool | NEXUS Hackathon 2026</p>
-        </footer>
       </div>
     </div>
   )
