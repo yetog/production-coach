@@ -1,0 +1,119 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Audiotool-inspired dark theme */
+    --background: 220 20% 8%;
+    --foreground: 210 20% 95%;
+
+    --card: 220 20% 12%;
+    --card-foreground: 210 20% 95%;
+
+    --primary: 180 70% 50%;
+    --primary-foreground: 220 20% 8%;
+
+    --secondary: 220 15% 18%;
+    --secondary-foreground: 210 20% 90%;
+
+    --muted: 220 15% 20%;
+    --muted-foreground: 210 15% 60%;
+
+    --accent: 280 60% 60%;
+    --accent-foreground: 210 20% 95%;
+
+    --destructive: 0 70% 50%;
+
+    --border: 220 15% 20%;
+    --input: 220 15% 18%;
+    --ring: 180 70% 50%;
+
+    --radius: 0.5rem;
+
+    /* Coach-specific */
+    --coach-active: 120 60% 50%;
+    --coach-thinking: 45 90% 55%;
+    --coach-speaking: 180 70% 50%;
+  }
+}
+
+@layer base {
+  * {
+    border-color: hsl(var(--border));
+  }
+
+  body {
+    margin: 0;
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+
+  #root {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+}
+
+/* Coach Dot States */
+.coach-dot {
+  @apply w-4 h-4 rounded-full transition-all duration-300;
+}
+
+.coach-dot.idle {
+  @apply bg-muted-foreground/50;
+}
+
+.coach-dot.listening {
+  @apply bg-[hsl(var(--coach-active))] animate-pulse;
+  box-shadow: 0 0 10px hsl(var(--coach-active) / 0.5);
+}
+
+.coach-dot.thinking {
+  @apply bg-[hsl(var(--coach-thinking))];
+  animation: pulse 1s ease-in-out infinite;
+}
+
+.coach-dot.speaking {
+  @apply bg-[hsl(var(--coach-speaking))] animate-glow;
+}
+
+/* Chat Panel */
+.chat-message {
+  @apply p-3 rounded-lg max-w-[85%];
+}
+
+.chat-message.user {
+  @apply bg-primary text-primary-foreground ml-auto;
+}
+
+.chat-message.coach {
+  @apply bg-secondary text-secondary-foreground;
+}
+
+/* Session Status */
+.device-chip {
+  @apply px-2 py-1 text-xs rounded bg-secondary text-secondary-foreground;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(var(--background));
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted));
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground));
+}
