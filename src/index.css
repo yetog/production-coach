@@ -213,6 +213,18 @@
   }
 }
 
+/* iOS safe area support */
+.safe-area-inset-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+/* Prevent iOS zoom on input focus */
+@supports (-webkit-touch-callout: none) {
+  input, textarea {
+    font-size: 16px !important;
+  }
+}
+
 /* Tailwind CSS Animate classes */
 .animate-in {
   animation-name: enter;
