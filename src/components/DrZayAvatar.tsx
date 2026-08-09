@@ -1,13 +1,14 @@
 import { cn } from '@/lib/utils'
 import type { CoachState } from '@/types'
 
-// Avatar image URLs - replace these with actual generated images
-// For now, using placeholders that will fall back to initials
+// Avatar image URLs hosted on IONOS S3
+const S3_BASE = 'https://s3.us-central-1.ionoscloud.com/audiotools'
+
 const AVATAR_IMAGES: Record<CoachState, string | null> = {
-  idle: null,      // '/images/dr-zay-idle.png'
-  listening: null, // '/images/dr-zay-listening.png'
-  thinking: null,  // '/images/dr-zay-thinking.png'
-  speaking: null,  // '/images/dr-zay-speaking.png'
+  idle: `${S3_BASE}/A9A7709C-5201-44A5-9BFA-B8AD30BD6544.png`,      // Arms crossed, confident
+  listening: `${S3_BASE}/3737FA40-A8A5-446A-ABF0-E91071E78B0C.png`, // Chat bubble, attentive
+  thinking: `${S3_BASE}/E0C16600-82CF-48FB-A967-47E01284BFF1.png`,  // Gold glow, music notes
+  speaking: `${S3_BASE}/AF32901C-542D-4A36-8948-7ECC2075F605.png`,  // Hand gesturing, sound waves
 }
 
 interface DrZayAvatarProps {
