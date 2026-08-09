@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  production-coach:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3021:80"
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
+    container_name: production-coach

@@ -5,23 +5,31 @@ node_modules/
 
 # Build outputs
 dist/
+dist-ssr/
 build/
 *.tsbuildinfo
+*.local
 
 # Environment
 .env
 .env.local
 .env.*.local
 
-# Agent action logs - contain real project UUIDs, and this repo is public (#22)
+# Agent action logs
 bot/.actions/
 
-# IDE
+# IDE/Editor
 .idea/
-.vscode/
+.vscode/*
+!.vscode/extensions.json
 *.swp
 *.swo
+*.sw?
 *~
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
 
 # OS
 .DS_Store
@@ -31,6 +39,10 @@ Thumbs.db
 logs/
 *.log
 npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
 
 # Testing
 coverage/
