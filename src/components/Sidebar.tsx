@@ -259,12 +259,6 @@ export function Sidebar({
             <Info className="w-4 h-4" />
             <span>NEXUS Hackathon 2026</span>
           </div>
-          <div className="mt-2 flex items-center gap-2">
-            <span className="text-[10px] text-muted-foreground/60">Powered by</span>
-            <span className="text-[10px] font-medium text-cyan-400">IONOS AI</span>
-            <span className="text-[10px] text-muted-foreground/60">•</span>
-            <span className="text-[10px] font-medium text-purple-400">ElevenLabs</span>
-          </div>
         </div>
       </div>
     </>

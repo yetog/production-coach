@@ -1,32 +1,87 @@
-# React + TypeScript + Vite
+# Production Coach
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+> AI-powered music production assistant for Audiotool - NEXUS Hackathon 2026
 
-Currently, two official plugins are available:
+## Quick Start
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+```bash
+# Frontend
+npm install
+npm run dev
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+# Backend (separate terminal)
+cd server
+npm install
+node index.js
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+**Live Demo:** https://zaylegend.com/production-coach/
+
+---
+
+## Current Status
+
+| Component | Status | Owner |
+|-----------|--------|-------|
+| Frontend UI | **v1 Complete** | Isayah |
+| Backend API | **v1 Complete** | Isayah |
+| NEXUS SDK Integration | **Not Started** | Nolan |
+| QA Testing | **In Progress** | Arian |
+
+---
+
+## Documentation
+
+| Document | Audience | Description |
+|----------|----------|-------------|
+| [IMPLEMENTATION.md](./IMPLEMENTATION.md) | All | Full technical overview |
+| [docs/BACKEND.md](./docs/BACKEND.md) | Nolan | Backend integration guide |
+| [docs/QA_TESTING.md](./docs/QA_TESTING.md) | Arian | Testing checklist |
+
+---
+
+## What's Built (Frontend v1)
+
+- Chat interface with Dr. Zay AI persona
+- Animated avatar with state transitions (idle/listening/thinking/speaking)
+- Voice input (Web Speech API)
+- Voice output (ElevenLabs TTS)
+- Settings sidebar (voice toggle, preferences)
+- Production goal tracking
+- 9-step progress checklist
+- Quick prompt suggestions
+- Session persistence (localStorage)
+
+## What's Built (Backend v1)
+
+- Express.js API server (port 3021)
+- IONOS Model Hub integration for AI chat
+- ElevenLabs integration for text-to-speech
+- Dr. Zay system prompt with coaching persona
+- Device suggestion parsing from AI responses
+
+## What's NOT Built Yet
+
+- NEXUS SDK connection (real Audiotool session data)
+- Device adding functionality
+- Real-time session state (BPM, key, devices)
+- Chattiness slider functionality
+- Persona switching
+
+---
+
+## Tech Stack
+
+- **Frontend:** React 18, TypeScript, Vite, Tailwind CSS
+- **Backend:** Express.js, Node.js
+- **AI:** IONOS Model Hub (Llama 3.1 8B)
+- **Voice:** ElevenLabs TTS, Web Speech API STT
+- **Hosting:** Nginx reverse proxy
+
+---
+
+## Team
+
+- **Isayah** - Frontend, Backend API
+- **Nolan** - NEXUS SDK, Backend Integration
+- **Arian** - QA Testing
