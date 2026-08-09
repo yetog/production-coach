@@ -9,4 +9,12 @@ export default defineConfig({
     },
   },
   base: '/production-coach/',
+  server: {
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3021',
+        changeOrigin: true,
+      },
+    },
+  },
 })
