@@ -1,0 +1,11 @@
+{
+  // Tests get the same compiler settings as src, but are typechecked only -
+  // never emitted into dist/. `npm run typecheck` runs both projects.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node", "vitest/globals"]
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}

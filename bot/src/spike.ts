@@ -167,32 +167,34 @@ async function main(): Promise<void> {
   )
 
   // --- 5: automation is readable --------------------------------------------
-  try {
-    tBeforeModify = 0
-    await doc.modify((t) => {
-      const autoTrack = t.create("automationTrack", {
-        automatedParameter: synth.fields.gain.location,
-      })
-      const autoCollection = t.create("automationCollection", {})
-      t.create("automationRegion", {
-        collection: autoCollection.location,
-        track: autoTrack.location,
-        region: { positionTicks: 0, durationTicks: Ticks.SemiBreve },
-      })
-      t.create("automationEvent", {
-        collection: autoCollection.location,
-        positionTicks: 0,
-        value: 0.5,
-      })
+  // Deliberately NOT wrapped in try/catch. A throw inside doc.modify() never
+  // releases the transaction lock, so the document is wedged from that point
+  // on: recording a FAIL and carrying on would leave steps 6-8 below hanging
+  // forever on a document that can no longer be modified, and the spike would
+  // look hung rather than failed. Let it throw - main()'s handler reports it
+  // and exits. See wedge.test.ts, which pins this SDK behaviour.
+  tBeforeModify = 0
+  await doc.modify((t) => {
+    const autoTrack = t.create("automationTrack", {
+      automatedParameter: synth.fields.gain.location,
     })
-    check(
-      "automation events flow through pipeline",
-      of("automation-added").length === 1,
-      `${of("automation-added").length} automation-added events`,
-    )
-  } catch (error) {
-    check("automation events flow through pipeline", false, String(error))
-  }
+    const autoCollection = t.create("automationCollection", {})
+    t.create("automationRegion", {
+      collection: autoCollection.location,
+      track: autoTrack.location,
+      region: { positionTicks: 0, durationTicks: Ticks.SemiBreve },
+    })
+    t.create("automationEvent", {
+      collection: autoCollection.location,
+      positionTicks: 0,
+      value: 0.5,
+    })
+  })
+  check(
+    "automation events flow through pipeline",
+    of("automation-added").length === 1,
+    `${of("automation-added").length} automation-added events`,
+  )
 
   // --- 6: query pipeline (PULL) ---------------------------------------------
   const analysis = analyzeSession(doc)

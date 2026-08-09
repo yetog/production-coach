@@ -13,6 +13,9 @@ build/
 .env.local
 .env.*.local
 
+# Agent action logs - contain real project UUIDs, and this repo is public (#22)
+bot/.actions/
+
 # IDE
 .idea/
 .vscode/

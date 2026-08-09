@@ -9,7 +9,9 @@
     "spike": "tsx src/spike.ts",
     "spike:live": "tsx src/spike-live.ts",
     "build": "tsc",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "start": "node dist/index.js"
   },
   "dependencies": {
@@ -18,7 +20,8 @@
   "devDependencies": {
     "@types/node": "^20.10.0",
     "tsx": "^4.7.0",
-    "typescript": "^5.3.0"
+    "typescript": "^5.3.0",
+    "vitest": "^3.2.4"
   },
   "engines": {
     "node": ">=18.0.0"

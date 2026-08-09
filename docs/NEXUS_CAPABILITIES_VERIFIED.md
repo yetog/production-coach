@@ -131,6 +131,50 @@ or `bot/src/devices.ts` for our device taxonomy over it.
 
 ---
 
+## Routing: which socket does a device actually output from?
+
+A device is silent until a `desktopAudioCable` runs from its audio output into a
+`mixerChannel`'s `audioInput`. Most devices call that socket `audioOutput` -
+**but eight do not, and five have no audio output at all.** Getting it wrong
+throws inside `doc.modify()`, which wedges the document permanently, so the
+socket must be resolved *before* the transaction opens. `bot/src/routing.ts`
+does that; `assertAudioRoutable()` is the guard.
+
+Derived by creating each device **and the cable** against an offline document
+with validation on - not read off the typings. `bot/src/routing.test.ts`
+re-derives the whole table on every run, so a rename in a future SDK release
+fails there instead of in a live session.
+
+**Audio output socket is not `audioOutput`:**
+
+| Device | Socket | Note |
+|---|---|---|
+| `machiniste` | `mainOutput` | drum machine - **it is routable**, it just isn't `audioOutput` |
+| `minimixer` | `mainOutput` | also has `auxSendOutput` |
+| `rasselbock` | `masterOutput` | |
+| `mixerMaster`, `mixerGroup`, `mixerAux` | `insertOutput` | |
+| `audioSplitter` | `audioOutputA` | also `audioOutputB` / `audioOutputC` |
+| `bandSplitter` | `highAudioOutput` | also `midAudioOutput` / `lowAudioOutput` |
+
+**No audio output - a `desktopAudioCable` from these is always rejected:**
+
+| Device | Why | Use instead |
+|---|---|---|
+| `matrixArpeggiator` | note source, not an audio source | `desktopNoteCable` from `notesOutput` |
+| `mixerChannel` | `sideChainOutput` is a sidechain send | `mixerSideChainCable` |
+| `noteSplitter` | routes notes; only has `notesInput` | - |
+| `mixerDelayAux`, `mixerReverbAux` | expose no output socket at all | feed from a `mixerChannel` send |
+
+**Note sources** (`desktopNoteCable` `fromSocket`): `matrixArpeggiator.notesOutput`
+and `tonematrix.noteOutput`. `tonematrix` is **both** - it outputs audio *and*
+emits the notes it is stepping.
+
+Validation is **type-aware**: it rejects `notesOutput` -> `audioInput` and
+`sideChainOutput` -> `audioInput`, so an offline test is a real check of routing
+legality, not just of field names.
+
+---
+
 ## Auth facts (issue #2)
 
 - `project:write` is the **only** scope. Read-only is our discipline
