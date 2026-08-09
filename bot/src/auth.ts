@@ -12,6 +12,7 @@
  */
 import { createAudiotoolClient, createServerAuth, type AudiotoolClient } from "@audiotool/nexus"
 import { createDiskWasmLoader, createNodeTransport } from "@audiotool/nexus/node"
+import { normalizeProjectRef } from "./nexus/project-ref.js"
 
 export async function createClientFromEnv(): Promise<AudiotoolClient> {
   const pat = process.env.AUDIOTOOL_PAT
@@ -46,13 +47,12 @@ export async function createClientFromEnv(): Promise<AudiotoolClient> {
   )
 }
 
+/**
+ * The project to operate on, as the canonical `projects/<uuid>` name.
+ *
+ * Accepts a studio URL from either host, a `projects/<uuid>` name, or a bare
+ * uuid - see normalizeProjectRef, which owns the parsing and the error text.
+ */
 export function projectFromEnv(): string {
-  const project = process.env.AUDIOTOOL_PROJECT_URL
-  if (project === undefined || project === "" || project.includes("<PROJECT_ID>")) {
-    throw new Error(
-      "AUDIOTOOL_PROJECT_URL not set in bot/.env - use the full studio URL, " +
-        "e.g. https://beta.audiotool.com/studio?project=<id>",
-    )
-  }
-  return project
+  return normalizeProjectRef(process.env.AUDIOTOOL_PROJECT_URL)
 }
