@@ -11,7 +11,7 @@ const PORT = process.env.PORT || 3021;
 // IONOS Model Hub config
 const IONOS_API_KEY = process.env.IONOS_API_KEY;
 const IONOS_BASE_URL = process.env.IONOS_BASE_URL || 'https://openai.inference.de-txl.ionos.com/v1';
-const IONOS_CHAT_MODEL = process.env.IONOS_CHAT_MODEL || 'meta-llama/llama-3.1-8b-instruct';
+const IONOS_CHAT_MODEL = process.env.IONOS_CHAT_MODEL || 'meta-llama/Meta-Llama-3.1-8B-Instruct';
 
 // ElevenLabs config
 const ELEVEN_LABS_API_KEY = process.env.ELEVEN_LABS_API_KEY;
