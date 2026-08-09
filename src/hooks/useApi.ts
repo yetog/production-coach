@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from 'react'
 
-const API_BASE = import.meta.env.VITE_API_URL || '/api'
+const API_BASE = import.meta.env.VITE_API_URL || '/production-coach/api'
 
 interface ChatMessage {
   role: 'user' | 'coach' | 'assistant'
