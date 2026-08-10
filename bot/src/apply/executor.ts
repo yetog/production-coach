@@ -17,7 +17,7 @@
  *     for undo.
  */
 import { Ticks } from "@audiotool/nexus/utils"
-import type { NotePattern, Plan, PlanAction } from "../plan/contract.js"
+import type { NotePattern, Plan } from "../plan/contract.js"
 import { assertAudioRoutable } from "../routing.js"
 
 export interface ExecuteResult {

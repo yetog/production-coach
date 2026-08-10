@@ -6,33 +6,22 @@
  *   npm run producer -- apply   --project <url> --command "..." --plan <plan-id>
  *   npm run producer -- undo    --project <url> [--action <action-id>]
  *
- * Three rules this file exists to enforce:
- *
- *  1. `analyze` and `plan` never mutate. They run against a read-only proxy, so
- *     a stray write throws instead of reaching the project.
- *  2. `apply` refuses without an explicit --plan id that matches the plan just
- *     computed. You cannot apply by accident.
- *  3. Every verb gets its OWN document, and every document is stopped. After a
- *     failed apply the document is wedged - undo and verify cannot run on it,
- *     they need a fresh open(). withProject() is what guarantees that.
+ * This file is argument parsing and human-readable output. Every safety rule -
+ * read-only analyze/plan, the explicit plan id, the confirmation gate, a fresh
+ * document per verb, the apply timeout - lives in agent/service.ts, which the
+ * HTTP bridge (#23) also calls. Two front doors, one set of rules; that is the
+ * point of the split.
  */
+import { createAgentService, AgentError } from "./agent/service.js"
+import type { SessionReport } from "./analyze/analyzer.js"
+import { describeDryRun } from "./apply/safety.js"
 import { createClientFromEnv } from "./auth.js"
-import { analyzeSessionReport } from "./analyze/analyzer.js"
-import { ActionLog } from "./apply/action-log.js"
-import { executePlan } from "./apply/executor.js"
-import { describeDryRun, undoAction, verifyAction } from "./apply/safety.js"
 import { loadEnv } from "./env.js"
-import { withProject } from "./nexus/client.js"
-import { normalizeProjectRef } from "./nexus/project-ref.js"
-import { planCommand } from "./plan/planner.js"
-import { asReadonly } from "./readonly.js"
+import type { Plan } from "./plan/contract.js"
 
 type Verb = "analyze" | "plan" | "apply" | "undo"
 
 const VERBS: Verb[] = ["analyze", "plan", "apply", "undo"]
-
-/** An apply that hangs is indistinguishable from one that failed. */
-const APPLY_TIMEOUT_MS = 60_000
 
 interface Args {
   verb: Verb
@@ -47,7 +36,7 @@ function parseArgs(argv: string[]): Args {
   const verb = argv[0] as Verb | undefined
   if (verb === undefined || !VERBS.includes(verb)) {
     throw new Error(
-      `Usage: npm run producer -- <${VERBS.join("|")}> --project <url> [--command "..."] [--plan <id>] [--action <id>]`,
+      `Usage: npm run producer -- <${VERBS.join("|")}> --project <url> [--command "..."] [--plan <id>] [--action <id>] [--json]`,
     )
   }
   const args: Args = { verb, json: false }
@@ -91,120 +80,45 @@ function requireCommand(args: Args): string {
 async function main(): Promise<void> {
   loadEnv()
   const args = parseArgs(process.argv.slice(2))
-  const project = args.project ?? process.env.AUDIOTOOL_PROJECT_URL
-  const client = await createClientFromEnv()
-  const log = new ActionLog()
+  // Falls back to AUDIOTOOL_PROJECT_URL inside the service, so the CLI and
+  // the bridge resolve the default project identically.
+  const project = args.project
+  const agent = createAgentService({ client: await createClientFromEnv() })
 
   switch (args.verb) {
     case "analyze": {
-      // Read-only proxy: modify() throws rather than reaching the project.
-      const report = await withProject(client, project, async (doc) =>
-        analyzeSessionReport(asReadonly(doc as never)),
-      )
+      const report = await agent.analyze(project)
       print(args, report, () => renderAnalysis(report))
       return
     }
 
     case "plan": {
       const command = requireCommand(args)
-      const { report, plan } = await withProject(client, project, async (doc) => {
-        const report = analyzeSessionReport(asReadonly(doc as never))
-        return { report, plan: planCommand(command, report) }
-      })
-      print(args, plan, () => renderPlan(plan, report.risks))
+      const plan = await agent.plan(project, command)
+      print(args, plan, () => renderPlan(plan))
       return
     }
 
     case "apply": {
       const command = requireCommand(args)
-
-      // Plan and apply in separate documents. Re-planning here also means the
-      // --plan id is checked against a CURRENT read of the project, not a
-      // stale one from minutes ago.
-      const plan = await withProject(client, project, async (doc) =>
-        planCommand(command, analyzeSessionReport(asReadonly(doc as never))),
-      )
-
-      if (args.planId === undefined) {
-        throw new Error(
-          `apply requires --plan ${plan.planId}. Run \`plan\` first and read it before applying.`,
-        )
-      }
-      if (args.planId !== plan.planId) {
-        throw new Error(
-          `Plan id mismatch: you passed "${args.planId}" but this command now plans as ` +
-            `"${plan.planId}". The project changed - re-run \`plan\` and read it again.`,
-        )
-      }
-      if (plan.requiresConfirmation) {
-        throw new Error(
-          `This plan needs confirmation before it can be applied.\n${plan.clarification ?? plan.summary}`,
-        )
-      }
-
-      const result = await withTimeout(
-        withProject(client, project, async (doc) => executePlan(doc as never, plan)),
-        APPLY_TIMEOUT_MS,
-        "apply timed out - the document may have been wedged by a failed transaction",
-      )
-
-      const record = await log.record({
-        project: normalizeProjectRef(project),
-        command,
-        planId: plan.planId,
-        createdEntityIds: result.createdEntityIds,
-        updatedFields: [],
-      })
-
-      // Fresh document for verification: if the apply above had failed, the one
-      // it used would be wedged and unusable.
-      const verified = await withProject(client, project, async (doc) =>
-        verifyAction(doc as never, record, plan),
-      )
-
-      print(args, { record, verified, summary: result.summary }, () =>
+      const outcome = await agent.apply(project, command, args.planId)
+      print(args, outcome, () =>
         [
-          result.summary,
-          `action ${record.actionId} - ${record.createdEntityIds.length} entities created`,
-          verified.ok
-            ? `verified: ${verified.checked} checks passed`
-            : `VERIFICATION FAILED:\n  ${verified.failures.join("\n  ")}`,
-          `undo with: npm run producer -- undo --action ${record.actionId}`,
+          outcome.summary,
+          `action ${outcome.action.actionId} - ${outcome.action.createdEntityIds.length} entities created`,
+          outcome.verification.ok
+            ? `verified: ${outcome.verification.checked} checks passed`
+            : `VERIFICATION FAILED:\n  ${outcome.verification.failures.join("\n  ")}`,
+          `undo with: npm run producer -- undo --action ${outcome.action.actionId}`,
         ].join("\n"),
       )
-      if (!verified.ok) process.exitCode = 1
+      if (!outcome.verification.ok) process.exitCode = 1
       return
     }
 
     case "undo": {
-      const record =
-        args.actionId === undefined ? await log.latest() : await log.get(args.actionId)
-      if (record === undefined) {
-        throw new Error(
-          args.actionId === undefined
-            ? "No actions recorded yet - nothing to undo."
-            : `No action "${args.actionId}" in the log.`,
-        )
-      }
-      if (record.undoneAt !== undefined) {
-        throw new Error(`Action ${record.actionId} was already undone at ${record.undoneAt}.`)
-      }
-
-      const result = await withProject(client, project, async (doc) =>
-        undoAction(doc as never, record),
-      )
-      await log.markUndone(record.actionId)
-
-      print(args, result, () =>
-        [
-          `undid ${record.actionId}: removed ${result.removedEntityIds.length} entities`,
-          result.missingEntityIds.length === 0
-            ? ""
-            : `${result.missingEntityIds.length} were already gone`,
-        ]
-          .filter(Boolean)
-          .join("\n"),
-      )
+      const outcome = await agent.undo(project, args.actionId)
+      print(args, outcome, () => outcome.summary)
       return
     }
   }
@@ -214,13 +128,15 @@ function print(args: Args, data: unknown, human: () => string): void {
   console.log(args.json ? JSON.stringify(data, null, 2) : human())
 }
 
-function renderAnalysis(report: ReturnType<typeof analyzeSessionReport>): string {
+function renderAnalysis(report: SessionReport): string {
   const lines = [
     `${report.tempoBpm} bpm, ${report.signature}, ${report.lengthBars} bars (${report.shape})`,
-    `devices: ${Object.entries(report.inventory)
-      .filter(([, n]) => n > 0)
-      .map(([k, n]) => `${n} ${k}`)
-      .join(", ")}`,
+    `devices: ${
+      Object.entries(report.inventory)
+        .filter(([, n]) => n > 0)
+        .map(([k, n]) => `${n} ${k}`)
+        .join(", ") || "none"
+    }`,
   ]
   for (const section of report.sections) {
     lines.push(
@@ -233,7 +149,7 @@ function renderAnalysis(report: ReturnType<typeof analyzeSessionReport>): string
   return lines.join("\n")
 }
 
-function renderPlan(plan: ReturnType<typeof planCommand>, risks: string[]): string {
+function renderPlan(plan: Plan): string {
   const lines = [
     plan.interpretedIntent,
     "",
@@ -241,32 +157,19 @@ function renderPlan(plan: ReturnType<typeof planCommand>, risks: string[]): stri
     "",
     "dry run - this is what apply would do:",
     ...describeDryRun(plan).map((line) => `  - ${line}`),
-  ]
-  for (const risk of risks) lines.push(`  risk: ${risk}`)
-  lines.push(
     "",
     plan.requiresConfirmation
       ? `NEEDS CONFIRMATION: ${plan.clarification ?? "answer the question above, then re-run plan"}`
       : `apply with: npm run producer -- apply --command "${plan.command}" --plan ${plan.planId}`,
-  )
+  ]
   return lines.join("\n")
 }
 
-async function withTimeout<T>(work: Promise<T>, ms: number, message: string): Promise<T> {
-  let timer: NodeJS.Timeout | undefined
-  try {
-    return await Promise.race([
-      work,
-      new Promise<never>((_, reject) => {
-        timer = setTimeout(() => reject(new Error(message)), ms)
-      }),
-    ])
-  } finally {
-    if (timer !== undefined) clearTimeout(timer)
-  }
-}
-
 main().catch((error: unknown) => {
-  console.error(`\n${error instanceof Error ? error.message : String(error)}`)
+  // AgentError messages are already written for a human; anything else gets
+  // its message printed rather than a stack.
+  const message =
+    error instanceof AgentError || error instanceof Error ? error.message : String(error)
+  console.error(`\n${message}`)
   process.exit(1)
 })
