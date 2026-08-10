@@ -294,3 +294,75 @@
 .animate-spin-slow {
   animation: spin-slow 8s linear infinite;
 }
+
+/* --- Producer command centre (#24) ------------------------------------- */
+/* Deliberately plain and high-contrast: this is the surface the demo is
+   driven from, so legibility beats decoration. */
+.command-center {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding: 0.9rem;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  border-radius: 0.75rem;
+  background: rgb(255 255 255 / 0.04);
+}
+.command-center form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+.command-center label {
+  width: 100%;
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+  opacity: 0.72;
+}
+.command-center input {
+  flex: 1 1 16rem;
+  min-width: 0;
+  padding: 0.55rem 0.7rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgb(255 255 255 / 0.16);
+  background: rgb(0 0 0 / 0.28);
+  color: inherit;
+  font: inherit;
+}
+.command-center button {
+  padding: 0.55rem 0.9rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgb(255 255 255 / 0.18);
+  background: rgb(255 255 255 / 0.08);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.command-center button:disabled { opacity: 0.45; cursor: not-allowed; }
+.command-center button:not(:disabled):hover { background: rgb(255 255 255 / 0.14); }
+
+.command-examples { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.command-examples button { font-size: 0.78rem; padding: 0.32rem 0.6rem; opacity: 0.85; }
+
+.command-plan,
+.command-question,
+.command-result {
+  padding: 0.7rem 0.8rem;
+  border-radius: 0.6rem;
+  background: rgb(0 0 0 / 0.25);
+  border-left: 3px solid rgb(255 255 255 / 0.35);
+}
+.command-plan h3 { margin: 0 0 0.35rem; font-size: 0.95rem; }
+.command-plan p, .command-question p, .command-result p { margin: 0.25rem 0; font-size: 0.87rem; }
+.command-plan details { margin-top: 0.45rem; font-size: 0.8rem; opacity: 0.8; }
+.command-plan ul { margin: 0.3rem 0 0 1.1rem; }
+.command-actions { display: flex; gap: 0.5rem; margin-top: 0.6rem; }
+
+/* The agent asking which bar to use is the product working as designed, so it
+   is styled as a prompt rather than as a failure. */
+.command-question { border-left-color: #f5b642; }
+.command-result { border-left-color: #4ade80; }
+.command-verification { font-size: 0.8rem; opacity: 0.82; }
+.command-error { color: #ff8a8a; font-size: 0.85rem; margin: 0; }
+.command-notice { color: #9fe6b0; font-size: 0.85rem; margin: 0; }
+.command-undo { align-self: flex-start; font-size: 0.82rem; }
