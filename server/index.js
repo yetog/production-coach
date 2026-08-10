@@ -3,6 +3,13 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import fetch from 'node-fetch';
 import { parseActionFromResponse } from './lib/parse-action.js';
+import {
+  CHAT_TIMEOUT_MS,
+  TTS_TIMEOUT_MS,
+  fetchWithTimeout,
+  validateChatMessages,
+  validateTtsText,
+} from './lib/guards.js';
 
 dotenv.config();
 
@@ -55,7 +62,15 @@ app.get('/api/health', (req, res) => {
 // Chat completion with IONOS Model Hub
 app.post('/api/chat', async (req, res) => {
   try {
-    const { messages, goal, sessionInfo } = req.body;
+    const { messages, goal, sessionInfo } = req.body ?? {};
+
+    // Validate before anything else. A malformed request is a client error
+    // whether or not this server has keys, and it used to reach .map() and
+    // surface as an opaque 500.
+    const validated = validateChatMessages(messages);
+    if (!validated.ok) {
+      return res.status(validated.status).json({ error: validated.error });
+    }
 
     if (!IONOS_API_KEY) {
       return res.status(500).json({ error: 'IONOS API key not configured' });
@@ -70,25 +85,26 @@ app.post('/api/chat', async (req, res) => {
       systemPrompt += `\n\nCurrent session info: BPM=${sessionInfo.bpm || '?'}, Key=${sessionInfo.key || '?'}, Devices: ${sessionInfo.devices?.length || 0}`;
     }
 
-    const response = await fetch(`${IONOS_BASE_URL}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${IONOS_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: IONOS_CHAT_MODEL,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          ...messages.map(m => ({
-            role: m.role === 'coach' ? 'assistant' : m.role,
-            content: m.content
-          }))
-        ],
-        max_tokens: 300,
-        temperature: 0.8,
+    const response = await fetchWithTimeout(
+      (signal) => fetch(`${IONOS_BASE_URL}/chat/completions`, {
+        method: 'POST',
+        signal,
+        headers: {
+          'Authorization': `Bearer ${IONOS_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: IONOS_CHAT_MODEL,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            ...validated.messages,
+          ],
+          max_tokens: 300,
+          temperature: 0.8,
+        }),
       }),
-    });
+      CHAT_TIMEOUT_MS,
+    );
 
     if (!response.ok) {
       const error = await response.text();
@@ -110,27 +126,39 @@ app.post('/api/chat', async (req, res) => {
 
   } catch (error) {
     console.error('Chat error:', error);
-    res.status(500).json({ error: 'Failed to get AI response' });
+    const timedOut = /timed out/i.test(String(error?.message));
+    res.status(timedOut ? 504 : 500).json({
+      error: timedOut ? 'AI service did not respond in time' : 'Failed to get AI response',
+    });
   }
 });
 
 // Text-to-speech with ElevenLabs
 app.post('/api/tts', async (req, res) => {
   try {
-    const { text } = req.body;
+    const { text } = req.body ?? {};
+
+    // ElevenLabs bills per character, so an unbounded body is a billing bug.
+    // Checked before the key check: a bad request is a 400 either way.
+    const validated = validateTtsText(text);
+    if (!validated.ok) {
+      return res.status(validated.status).json({ error: validated.error });
+    }
 
     if (!ELEVEN_LABS_API_KEY) {
       return res.status(500).json({ error: 'ElevenLabs API key not configured' });
     }
 
-    const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${ELEVEN_LABS_VOICE_ID}`, {
+    const response = await fetchWithTimeout(
+      (signal) => fetch(`https://api.elevenlabs.io/v1/text-to-speech/${ELEVEN_LABS_VOICE_ID}`, {
       method: 'POST',
+      signal,
       headers: {
         'xi-api-key': ELEVEN_LABS_API_KEY,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        text,
+        text: validated.text,
         model_id: 'eleven_flash_v2_5',
         voice_settings: {
           stability: 0.5,
@@ -139,7 +167,9 @@ app.post('/api/tts', async (req, res) => {
           use_speaker_boost: true
         }
       }),
-    });
+      }),
+      TTS_TIMEOUT_MS,
+    );
 
     if (!response.ok) {
       const error = await response.text();
@@ -153,7 +183,10 @@ app.post('/api/tts', async (req, res) => {
 
   } catch (error) {
     console.error('TTS error:', error);
-    res.status(500).json({ error: 'Failed to generate speech' });
+    const timedOut = /timed out/i.test(String(error?.message));
+    res.status(timedOut ? 504 : 500).json({
+      error: timedOut ? 'Speech service did not respond in time' : 'Failed to generate speech',
+    });
   }
 });
 
