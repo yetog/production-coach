@@ -13,7 +13,7 @@
  * possible at all.
  */
 
-export type PlanIntent = "add_808" | "preview_only" | "unknown"
+export type PlanIntent = "add_808" | "add_device" | "preview_only" | "unknown"
 
 /** How much damage a plan could do, for the confirmation gate in #22. */
 export type SafetyLevel = "creates_only" | "modifies_existing" | "destructive"

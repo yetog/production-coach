@@ -11,6 +11,7 @@
  */
 import type { SessionReport } from "../analyze/analyzer.js"
 import { CONFIDENCE_THRESHOLD } from "../analyze/sections.js"
+import { resolveDeviceName } from "./device-names.js"
 import type {
   NotePattern,
   Plan,
@@ -30,9 +31,13 @@ export function planCommand(command: string, session: SessionReport): Plan {
   const text = command.toLowerCase().trim()
 
   if (!mentions808(text)) {
-    return isPreviewCommand(text)
-      ? previewOnly(command, session)
-      : unknownCommand(command)
+    // "add a beatbox 9" - a device add, which is a different action from the
+    // musical 808 flow: it creates a routed instrument and nothing else.
+    if (isAddCommand(text)) {
+      const device = resolveDeviceName(text)
+      if (device !== undefined) return buildAddDevicePlan(command, device)
+    }
+    return isPreviewCommand(text) ? previewOnly(command, session) : unknownCommand(command)
   }
 
   const explicitBar = explicitBarFrom(text)
@@ -128,6 +133,41 @@ function build808Plan(
     verification,
     requiresConfirmation: false,
   }
+}
+
+function buildAddDevicePlan(
+  command: string,
+  device: { deviceType: string; displayName: string },
+): Plan {
+  return {
+    planId: `add_device-${device.deviceType}`,
+    command,
+    intent: "add_device",
+    interpretedIntent: `Add a ${device.displayName} and route it to the mixer`,
+    // A device add has no place on the timeline - it is gear, not material.
+    target: { startBar: 0, endBar: 0, confidence: 1 },
+    actions: [
+      {
+        type: "create_source",
+        deviceType: device.deviceType,
+        displayName: device.displayName,
+      },
+      { type: "route_to_mixer", deviceType: device.deviceType },
+    ],
+    summary:
+      `I will add a ${device.displayName} and wire it to a new mixer channel so you can ` +
+      `hear it. It starts silent - nothing already in the project changes.`,
+    safety: "creates_only",
+    verification: [
+      { kind: "entities_exist", description: "the device and its cable" },
+      { kind: "routed_to_mixer", description: `the ${device.displayName} reaches a mixer channel` },
+    ],
+    requiresConfirmation: false,
+  }
+}
+
+function isAddCommand(text: string): boolean {
+  return /\b(add|throw|grab|drop|create|insert|put)\b/.test(text)
 }
 
 function needsAnswer(

@@ -54,20 +54,31 @@ export async function executePlan(
   const notes = plan.actions.find((a) => a.type === "create_notes")
   const track = plan.actions.find((a) => a.type === "create_note_track")
 
-  if (source === undefined || region === undefined || notes === undefined) {
-    throw new Error(
-      "Plan is missing a source, a region or notes - refusing to apply a partial 808.",
-    )
+  if (source === undefined) {
+    throw new Error("Plan has no device to create - refusing to apply.")
   }
 
   // Throws with an actionable message for machiniste-style socket differences
   // and for devices that cannot take a desktopAudioCable at all.
   const outputSocket = assertAudioRoutable(source.deviceType)
 
+  // A device add (#28) creates routed gear and stops there. Anything that
+  // writes to the timeline needs the full region + notes pair; half of one is
+  // a partial action and worse than none.
+  const placesMaterial = region !== undefined || notes !== undefined
+  if (placesMaterial && (region === undefined || notes === undefined)) {
+    throw new Error(
+      "Plan has a region without notes, or notes without a region - refusing to apply a partial action.",
+    )
+  }
+
   const ticksPerBar = ticksPerBarOf(doc)
-  const startTicks = (region.startBar - 1) * ticksPerBar
-  const durationTicks = region.durationBars * ticksPerBar
-  const notePositions = patternPositions(notes.pattern, durationTicks, ticksPerBar)
+  const startTicks = region === undefined ? 0 : (region.startBar - 1) * ticksPerBar
+  const durationTicks = region === undefined ? 0 : region.durationBars * ticksPerBar
+  const notePositions =
+    notes === undefined || region === undefined
+      ? []
+      : patternPositions(notes.pattern, durationTicks, ticksPerBar)
   const trackOrder = nextTrackOrder(doc)
 
   // --- one transaction, all or nothing -------------------------------------
@@ -90,37 +101,40 @@ export async function executePlan(
     })
     created.push(cable.id)
 
-    const noteTrack = tx.create("noteTrack", {
-      player: device.location,
-      // Unique across ALL track types: a duplicate throws, and per the wedge
-      // footgun that would be unrecoverable.
-      orderAmongTracks: trackOrder,
-    })
-    created.push(noteTrack.id)
-
-    const collection = tx.create("noteCollection", {})
-    created.push(collection.id)
-
-    const noteRegion = tx.create("noteRegion", {
-      collection: collection.location,
-      track: noteTrack.location,
-      region: {
-        positionTicks: startTicks,
-        durationTicks,
-        displayName: track?.displayName ?? "Agent 808",
-      },
-    })
-    created.push(noteRegion.id)
-
-    for (const position of notePositions) {
-      const note = tx.create("note", {
-        collection: collection.location,
-        pitch: notes.pitch,
-        positionTicks: startTicks + position.positionTicks,
-        durationTicks: position.durationTicks,
-        velocity: notes.velocity,
+    // Device-only plans stop here: routed gear, nothing on the timeline.
+    if (region !== undefined && notes !== undefined) {
+      const noteTrack = tx.create("noteTrack", {
+        player: device.location,
+        // Unique across ALL track types: a duplicate throws, and per the wedge
+        // footgun that would be unrecoverable.
+        orderAmongTracks: trackOrder,
       })
-      created.push(note.id)
+      created.push(noteTrack.id)
+
+      const collection = tx.create("noteCollection", {})
+      created.push(collection.id)
+
+      const noteRegion = tx.create("noteRegion", {
+        collection: collection.location,
+        track: noteTrack.location,
+        region: {
+          positionTicks: startTicks,
+          durationTicks,
+          displayName: track?.displayName ?? source.displayName,
+        },
+      })
+      created.push(noteRegion.id)
+
+      for (const position of notePositions) {
+        const note = tx.create("note", {
+          collection: collection.location,
+          pitch: notes.pitch,
+          positionTicks: startTicks + position.positionTicks,
+          durationTicks: position.durationTicks,
+          velocity: notes.velocity,
+        })
+        created.push(note.id)
+      }
     }
 
     return created
@@ -129,9 +143,11 @@ export async function executePlan(
   return {
     createdEntityIds,
     summary:
-      `Created a ${source.deviceType} ("${source.displayName}") routed to a new mixer ` +
-      `channel, with ${notePositions.length} note(s) across bars ` +
-      `${region.startBar}-${region.startBar + region.durationBars - 1}.`,
+      region === undefined
+        ? `Created a ${source.deviceType} ("${source.displayName}") routed to a new mixer channel.`
+        : `Created a ${source.deviceType} ("${source.displayName}") routed to a new mixer ` +
+          `channel, with ${notePositions.length} note(s) across bars ` +
+          `${region.startBar}-${region.startBar + region.durationBars - 1}.`,
   }
 }
 

@@ -185,3 +185,79 @@ describe("plan contract", () => {
     expect(plan.safety).toBe("creates_only")
   })
 })
+
+describe("planCommand - add a device (issue #28)", () => {
+  it('turns "add a beatbox 9" into an applyable add_device plan', () => {
+    const plan = planCommand("add a beatbox 9", report())
+
+    expect(plan.intent).toBe("add_device")
+    expect(plan.requiresConfirmation).toBe(false)
+    expect(plan.actions.map((a) => a.type)).toEqual(["create_source", "route_to_mixer"])
+  })
+
+  it("names the device in the summary the way a human wrote it", () => {
+    const plan = planCommand("throw a heisenberg on this", report())
+
+    expect(plan.summary).toMatch(/Heisenberg/)
+    expect(plan.interpretedIntent).toMatch(/Heisenberg/)
+  })
+
+  it("creates no notes, region or track - adding a device is not composing", () => {
+    const plan = planCommand("add a machiniste", report())
+    const types = plan.actions.map((a) => a.type)
+
+    expect(types).not.toContain("create_notes")
+    expect(types).not.toContain("create_note_region")
+    expect(types).not.toContain("create_note_track")
+  })
+
+  it("routes the device to the mixer, so it is actually audible", () => {
+    const plan = planCommand("add a beatbox 8", report())
+    const route = plan.actions.find((a) => a.type === "route_to_mixer")
+
+    expect(route).toBeDefined()
+  })
+
+  it("still prefers the 808 flow when the command mentions an 808", () => {
+    // "808" resolves to a bassline device, but "add an 808 under the drop" is
+    // the flagship musical action, not a bare device add.
+    const plan = planCommand("add a dark 808 under the drop", report())
+
+    expect(plan.intent).toBe("add_808")
+    expect(plan.actions.map((a) => a.type)).toContain("create_notes")
+  })
+
+  it("is marked creates_only, since it never touches existing material", () => {
+    expect(planCommand("add a gakki", report()).safety).toBe("creates_only")
+  })
+
+  it("gives distinct plan ids to different devices", () => {
+    expect(planCommand("add a gakki", report()).planId).not.toBe(
+      planCommand("add a heisenberg", report()).planId,
+    )
+  })
+
+  it("is deterministic", () => {
+    expect(planCommand("add a beatbox 9", report())).toEqual(
+      planCommand("add a beatbox 9", report()),
+    )
+  })
+
+  it("declares a verification check that the device reached the mixer", () => {
+    const plan = planCommand("add a beatbox 9", report())
+
+    expect(plan.verification.some((v) => v.kind === "routed_to_mixer")).toBe(true)
+  })
+
+  it("still returns unknown for a device that does not exist", () => {
+    const plan = planCommand("add a parametricEq", report())
+
+    expect(plan.intent).toBe("unknown")
+    expect(plan.actions).toEqual([])
+  })
+
+  it("does not fire on advice that merely mentions a device", () => {
+    // The coach saying a device name is not an instruction to create one.
+    expect(planCommand("your heisenberg patch sounds great", report()).intent).toBe("unknown")
+  })
+})

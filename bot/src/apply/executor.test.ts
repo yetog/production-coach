@@ -14,7 +14,7 @@ import { planCommand } from "../plan/planner.js"
 import type { Plan } from "../plan/contract.js"
 import { stopQuietly } from "../test-support.js"
 import { executePlan } from "./executor.js"
-import { verifyAction } from "./safety.js"
+import { undoAction, verifyAction } from "./safety.js"
 
 type Doc = Awaited<ReturnType<typeof createOfflineDocument>>
 
@@ -214,6 +214,105 @@ describe("executePlan - the flagship 808 action", () => {
       expect(new Set([...first.createdEntityIds, ...second.createdEntityIds]).size).toBe(
         first.createdEntityIds.length + second.createdEntityIds.length,
       )
+    } finally {
+      await stopQuietly(doc)
+    }
+  })
+})
+
+describe("executePlan - add a device (issue #28)", () => {
+  it("creates the device and its cable, and nothing else", async () => {
+    const doc = await projectWithDrop()
+    try {
+      const plan = planFor(doc, "add a beatbox 9")
+      expect(plan.intent).toBe("add_device")
+
+      const result = await executePlan(doc as never, plan)
+      const types = result.createdEntityIds.map(
+        (id) => (doc.queryEntities.getEntity(id) as { entityType: string }).entityType,
+      )
+
+      expect(types).toContain("beatbox9")
+      expect(types).toContain("mixerChannel")
+      expect(types).toContain("desktopAudioCable")
+      // A device add must not write anything onto the timeline.
+      expect(types).not.toContain("note")
+      expect(types).not.toContain("noteRegion")
+      expect(types).not.toContain("noteTrack")
+    } finally {
+      await stopQuietly(doc)
+    }
+  })
+
+  it("passes its own verification checks", async () => {
+    const doc = await projectWithDrop()
+    try {
+      const plan = planFor(doc, "add a heisenberg")
+      const result = await executePlan(doc as never, plan)
+
+      const verified = await verifyAction(
+        doc as never,
+        {
+          actionId: "a",
+          timestamp: new Date().toISOString(),
+          project: "projects/x",
+          command: plan.command,
+          planId: plan.planId,
+          createdEntityIds: result.createdEntityIds,
+          updatedFields: [],
+        },
+        plan,
+      )
+
+      expect(verified.failures).toEqual([])
+    } finally {
+      await stopQuietly(doc)
+    }
+  })
+
+  it("uses the correct output socket for a device that is not audioOutput", async () => {
+    const doc = await projectWithDrop()
+    try {
+      // machiniste routes via mainOutput. Assuming audioOutput would throw
+      // inside the transaction and wedge the document.
+      const plan = planFor(doc, "add a machiniste")
+
+      await expect(executePlan(doc as never, plan)).resolves.toBeDefined()
+      await expect(doc.modify((t) => t.create("tinyGain", {}))).resolves.toBeDefined()
+    } finally {
+      await stopQuietly(doc)
+    }
+  })
+
+  it("leaves existing material untouched", async () => {
+    const doc = await projectWithDrop()
+    try {
+      const before = doc.queryEntities.get().map((e) => e.id)
+      await executePlan(doc as never, planFor(doc, "add a gakki"))
+
+      for (const id of before) expect(doc.queryEntities.getEntity(id), id).toBeDefined()
+    } finally {
+      await stopQuietly(doc)
+    }
+  })
+
+  it("can be undone like any other action", async () => {
+    const doc = await projectWithDrop()
+    try {
+      const before = doc.queryEntities.get().length
+      const result = await executePlan(doc as never, planFor(doc, "add a beatbox 8"))
+
+      await undoAction(doc as never, {
+        actionId: "a",
+        timestamp: new Date().toISOString(),
+        project: "projects/x",
+        command: "add a beatbox 8",
+        planId: "add_device-beatbox8",
+        createdEntityIds: result.createdEntityIds,
+        updatedFields: [],
+      })
+
+      expect(doc.queryEntities.get().length).toBe(before)
     } finally {
       await stopQuietly(doc)
     }
