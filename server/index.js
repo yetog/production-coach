@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import fetch from 'node-fetch';
+import { parseActionFromResponse } from './lib/parse-action.js';
 
 dotenv.config();
 
@@ -155,35 +156,6 @@ app.post('/api/tts', async (req, res) => {
     res.status(500).json({ error: 'Failed to generate speech' });
   }
 });
-
-// Parse AI response for actionable suggestions
-function parseActionFromResponse(content) {
-  const lowerContent = content.toLowerCase();
-
-  // Check for device suggestions
-  const devicePatterns = [
-    { pattern: /beatbox\s*8/i, device: 'beatbox8', name: 'Beatbox 8' },
-    { pattern: /beatbox\s*9/i, device: 'beatbox9', name: 'Beatbox 9' },
-    { pattern: /heisenberg/i, device: 'heisenberg', name: 'Heisenberg' },
-    { pattern: /pulverisateur/i, device: 'pulverisateur', name: 'Pulverisateur' },
-    { pattern: /bassline/i, device: 'bassline', name: 'Bassline' },
-    { pattern: /machiniste/i, device: 'machiniste', name: 'Machiniste' },
-    { pattern: /tonematrix/i, device: 'tonematrix', name: 'Tonematrix' },
-  ];
-
-  for (const { pattern, device, name } of devicePatterns) {
-    if (pattern.test(content) && /add|try|use|grab|throw/i.test(lowerContent)) {
-      return {
-        type: 'add_device',
-        label: `Add ${name}`,
-        description: `Add ${name} to your session`,
-        params: { deviceType: device, displayName: name }
-      };
-    }
-  }
-
-  return null;
-}
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Production Coach API running on port ${PORT}`);
