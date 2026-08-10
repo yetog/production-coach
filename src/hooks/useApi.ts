@@ -1,6 +1,8 @@
 import { useState, useCallback, useRef } from 'react'
+import { resolveApiBase } from '@/lib/api-base'
 
-const API_BASE = import.meta.env.VITE_API_URL || '/production-coach/api'
+// Derived from Vite's `base` so it cannot drift from the dev proxy (#41).
+const API_BASE = resolveApiBase(import.meta.env.BASE_URL, import.meta.env.VITE_API_URL)
 
 interface ChatMessage {
   role: 'user' | 'coach' | 'assistant'
