@@ -1,0 +1,94 @@
+name: CI
+
+# Three separate npm packages live in this repo (frontend at the root, bot/,
+# server/) with no workspace linking them. Each is installed and tested on its
+# own, because that is how they are actually developed and run.
+#
+# This exists because a root vite.config.ts once broke every bot test at
+# startup - exit 1, zero tests run - and nothing noticed until someone
+# happened to run them by hand.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A second push to the same PR makes the first run irrelevant.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bot:
+    name: bot (agent SDK)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          # 20.12+ is required: some paths use process.loadEnvFile.
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: bot/package-lock.json
+      - run: npm ci
+        working-directory: bot
+      - run: npm run typecheck
+        working-directory: bot
+      - run: npm test
+        working-directory: bot
+      # The offline spike is the end-to-end check against the real SDK
+      # validator - no token, no network, but real entity validation.
+      - run: npm run spike
+        working-directory: bot
+      - run: npm run build
+        working-directory: bot
+
+  server:
+    name: server (chat + tts API)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+        working-directory: server
+      - run: npm test
+        working-directory: server
+
+  frontend:
+    name: frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+
+  secrets:
+    name: no credentials committed
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # This repo is public and bot/.env holds a full-access Audiotool PAT.
+      # A tracked .env or a literal token is a stop-the-line failure.
+      - name: Reject tracked .env files
+        run: |
+          if git ls-files | grep -E '(^|/)\.env$'; then
+            echo "::error::A .env file is tracked. Remove it and rotate anything it held."
+            exit 1
+          fi
+      - name: Reject literal Audiotool tokens
+        run: |
+          if git grep -nE 'at_pat_[A-Za-z0-9_-]{20,}' -- . ':!*.test.*'; then
+            echo "::error::A literal Audiotool PAT appears in tracked files."
+            exit 1
+          fi
