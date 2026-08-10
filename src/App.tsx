@@ -6,6 +6,7 @@ import { Sidebar } from '@/components/Sidebar'
 import { GoalBanner } from '@/components/GoalBanner'
 import { QuickPrompts } from '@/components/QuickPrompts'
 import { MiniChecklist } from '@/components/MiniChecklist'
+import { CommandCenter } from '@/components/CommandCenter'
 import { useNexus } from '@/hooks/useNexus'
 import { useCoach } from '@/hooks/useCoach'
 import { useVoice } from '@/hooks/useVoice'
@@ -15,7 +16,10 @@ import type { ChatMessage, CoachAction, CoachSettings } from '@/types'
 const DR_ZAY_AVATAR = 'https://s3.us-central-1.ionoscloud.com/audiotools/A9A7709C-5201-44A5-9BFA-B8AD30BD6544.png'
 
 function App() {
-  const { session, addDevice } = useNexus()
+  // The whole agent surface, not just session/addDevice: CommandCenter needs
+  // plan/apply/undo to drive real DAW edits (#24).
+  const agent = useNexus()
+  const { session, addDevice } = agent
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [settings, setSettings] = useState<CoachSettings>({
     chattiness: 50,
@@ -160,6 +164,12 @@ function App() {
             </div>
           )}
         </header>
+
+        {/* Producer command centre (#24): plan -> review -> apply -> undo
+            against the real project, via the local agent bridge. */}
+        <div className="flex-shrink-0 px-4 pb-3">
+          <CommandCenter agent={agent} />
+        </div>
 
         {/* Scrollable content area */}
         <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
