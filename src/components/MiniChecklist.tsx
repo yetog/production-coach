@@ -50,8 +50,8 @@ export function MiniChecklist({ items, onToggle, className }: MiniChecklistProps
       {/* Checklist items */}
       <div
         className={cn(
-          'overflow-hidden transition-all duration-300',
-          isExpanded ? 'max-h-[400px]' : 'max-h-[120px]'
+          'transition-all duration-300 overflow-y-auto',
+          isExpanded ? 'max-h-[180px]' : 'max-h-[100px]'
         )}
       >
         <div className="px-3 pb-3 space-y-1">

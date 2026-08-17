@@ -101,23 +101,21 @@ export function Sidebar({
           {/* Current Goal */}
           {goal && (
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  Current Goal
-                </span>
-                <button
-                  onClick={onClearGoal}
-                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  Change
-                </button>
-              </div>
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Current Goal
+              </span>
               <div className="p-3 rounded-xl bg-gradient-to-r from-cyan-500/10 to-purple-500/10 border border-cyan-500/20">
                 <div className="flex items-start gap-2">
                   <Target className="w-4 h-4 text-cyan-400 mt-0.5 flex-shrink-0" />
-                  <p className="text-sm text-foreground">{goal}</p>
+                  <p className="text-sm text-foreground flex-1">{goal}</p>
                 </div>
               </div>
+              <button
+                onClick={onClearGoal}
+                className="w-full py-2 px-3 rounded-lg text-sm font-medium bg-secondary/50 text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors border border-border/50"
+              >
+                Change Goal
+              </button>
             </div>
           )}
 

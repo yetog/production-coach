@@ -39,6 +39,7 @@ function App() {
     applyAction,
     toggleChecklistItem,
     clearConversation,
+    stopSpeaking,
   } = useCoach({ session, onAddDevice: addDevice, voiceEnabled: settings.voiceEnabled })
 
   // STT with Web Speech API
@@ -89,6 +90,10 @@ function App() {
     if (isListening) {
       stopListening()
     } else {
+      // Stop Dr. Zay from speaking when user wants to talk
+      if (isSpeaking) {
+        stopSpeaking()
+      }
       startListening()
     }
   }

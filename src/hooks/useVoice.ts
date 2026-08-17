@@ -69,6 +69,8 @@ export function useVoice({ onTranscript, onSpeakingChange }: UseVoiceOptions = {
 
   const recognitionRef = useRef<ISpeechRecognition | null>(null)
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null)
+  const pauseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const accumulatedTranscriptRef = useRef<string>('')
 
   // Check browser support
   const isSupported = typeof window !== 'undefined' && (
@@ -147,16 +149,25 @@ export function useVoice({ onTranscript, onSpeakingChange }: UseVoiceOptions = {
     const recognition = new SpeechRecognitionClass() as ISpeechRecognition
     recognitionRef.current = recognition
 
-    recognition.continuous = false
+    recognition.continuous = true
     recognition.interimResults = true
     recognition.lang = 'en-US'
+
+    // Pause duration before considering speech complete (ms)
+    const PAUSE_DURATION = 2000
 
     recognition.onstart = () => {
       setIsListening(true)
       setTranscript('')
+      accumulatedTranscriptRef.current = ''
     }
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
+      // Clear any existing pause timer
+      if (pauseTimerRef.current) {
+        clearTimeout(pauseTimerRef.current)
+      }
+
       let finalTranscript = ''
       let interimTranscript = ''
 
@@ -169,19 +180,40 @@ export function useVoice({ onTranscript, onSpeakingChange }: UseVoiceOptions = {
         }
       }
 
-      setTranscript(finalTranscript || interimTranscript)
-
+      // Accumulate final transcripts
       if (finalTranscript) {
-        onTranscript?.(finalTranscript.trim())
+        accumulatedTranscriptRef.current += ' ' + finalTranscript
       }
+
+      // Show current state to user
+      const displayText = (accumulatedTranscriptRef.current + ' ' + interimTranscript).trim()
+      setTranscript(displayText)
+
+      // Set pause timer - if no new speech for PAUSE_DURATION, send the message
+      pauseTimerRef.current = setTimeout(() => {
+        const fullTranscript = accumulatedTranscriptRef.current.trim()
+        if (fullTranscript) {
+          onTranscript?.(fullTranscript)
+          accumulatedTranscriptRef.current = ''
+          setTranscript('')
+          // Stop recognition after sending
+          recognition.stop()
+        }
+      }, PAUSE_DURATION)
     }
 
     recognition.onerror = (event: Event) => {
       console.error('Speech recognition error:', event)
+      if (pauseTimerRef.current) {
+        clearTimeout(pauseTimerRef.current)
+      }
       setIsListening(false)
     }
 
     recognition.onend = () => {
+      if (pauseTimerRef.current) {
+        clearTimeout(pauseTimerRef.current)
+      }
       setIsListening(false)
     }
 
@@ -190,15 +222,28 @@ export function useVoice({ onTranscript, onSpeakingChange }: UseVoiceOptions = {
 
   // STT: Stop listening
   const stopListening = useCallback(() => {
+    if (pauseTimerRef.current) {
+      clearTimeout(pauseTimerRef.current)
+    }
     if (recognitionRef.current) {
       recognitionRef.current.stop()
       setIsListening(false)
     }
-  }, [])
+    // Send any accumulated transcript when manually stopped
+    const fullTranscript = accumulatedTranscriptRef.current.trim()
+    if (fullTranscript) {
+      onTranscript?.(fullTranscript)
+      accumulatedTranscriptRef.current = ''
+      setTranscript('')
+    }
+  }, [onTranscript])
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      if (pauseTimerRef.current) {
+        clearTimeout(pauseTimerRef.current)
+      }
       if (recognitionRef.current) {
         recognitionRef.current.stop()
       }
