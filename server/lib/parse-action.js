@@ -31,8 +31,20 @@ export const DEVICE_SUGGESTIONS = [
   { pattern: /\btonematrix\b/i, deviceType: "tonematrix", name: "Tonematrix" },
 ]
 
-/** Verbs that turn a device mention into a suggestion to add one. */
-const ACTION_VERB = /\b(add|adding|try|throw|throwing|grab|grabbing|use|using|drop)\b/i
+/**
+ * Phrases that turn a device mention into a suggestion to add one.
+ *
+ * "start with" and "go with" are here because that is how the coach most
+ * naturally makes a recommendation - without them, "start with a Beatbox 9"
+ * produced no button at all, which QA caught against the live model.
+ *
+ * "drop" is deliberately NOT a verb here. In production coaching it is
+ * overwhelmingly the noun - the drop section - so reading it as a verb makes
+ * any sentence about the drop that also names a device produce a spurious
+ * Add button.
+ */
+const ACTION_VERB =
+  /\b(add|adding|try|throw|throwing|grab|grabbing|use|using|put|start with|starting with|go with|reach for|bring in|layer in|layer)\b/i
 
 /**
  * Markers that invert a clause. "instead" and "rather" matter as much as

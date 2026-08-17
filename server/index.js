@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import fetch from 'node-fetch';
 import { parseActionFromResponse } from './lib/parse-action.js';
+import { buildChatRequest, describeProviders, resolveProvider } from './lib/chat-provider.js';
 import {
   CHAT_TIMEOUT_MS,
   TTS_TIMEOUT_MS,
@@ -16,10 +17,17 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3021;
 
-// IONOS Model Hub config
-const IONOS_API_KEY = process.env.IONOS_API_KEY;
-const IONOS_BASE_URL = process.env.IONOS_BASE_URL || 'https://openai.inference.de-txl.ionos.com/v1';
-const IONOS_CHAT_MODEL = process.env.IONOS_CHAT_MODEL || 'meta-llama/Meta-Llama-3.1-8B-Instruct';
+// Which model answers as Dr. Zay. OpenAI or IONOS, decided from the
+// environment at boot - see lib/chat-provider.js for why the request body
+// cannot simply be shared between them.
+const CHAT_PROVIDER = resolveProvider(process.env);
+
+// How many tokens a reply may use. Higher for OpenAI: on gpt-5.x this budget
+// also covers the model's internal reasoning, so the old 300 left very little
+// for the visible answer and truncated it mid-sentence.
+const MAX_REPLY_TOKENS = Number(
+  process.env.CHAT_MAX_TOKENS ?? (CHAT_PROVIDER.id === 'openai' ? 800 : 300),
+);
 
 // ElevenLabs config
 const ELEVEN_LABS_API_KEY = process.env.ELEVEN_LABS_API_KEY;
@@ -69,10 +77,15 @@ app.use(express.json());
 
 // Health check
 app.get('/api/health', (req, res) => {
+  const chat = describeProviders(CHAT_PROVIDER);
   res.json({
     status: 'ok',
     services: {
-      ionos: !!IONOS_API_KEY,
+      // Kept so existing callers do not break, but `chat` is the useful one:
+      // it names which provider and model is actually answering.
+      ionos: CHAT_PROVIDER.id === 'ionos',
+      openai: CHAT_PROVIDER.id === 'openai',
+      chat,
       elevenlabs: !!ELEVEN_LABS_API_KEY
     }
   });
@@ -91,8 +104,8 @@ app.post('/api/chat', async (req, res) => {
       return res.status(validated.status).json({ error: validated.error });
     }
 
-    if (!IONOS_API_KEY) {
-      return res.status(500).json({ error: 'IONOS API key not configured' });
+    if (CHAT_PROVIDER.id === 'none') {
+      return res.status(500).json({ error: CHAT_PROVIDER.reason });
     }
 
     // Build context-aware system prompt
@@ -104,30 +117,25 @@ app.post('/api/chat', async (req, res) => {
       systemPrompt += `\n\nCurrent session info: BPM=${sessionInfo.bpm || '?'}, Key=${sessionInfo.key || '?'}, Devices: ${sessionInfo.devices?.length || 0}`;
     }
 
+    const request = buildChatRequest(
+      CHAT_PROVIDER,
+      [{ role: 'system', content: systemPrompt }, ...validated.messages],
+      MAX_REPLY_TOKENS,
+    );
+
     const response = await fetchWithTimeout(
-      (signal) => fetch(`${IONOS_BASE_URL}/chat/completions`, {
+      (signal) => fetch(request.url, {
         method: 'POST',
         signal,
-        headers: {
-          'Authorization': `Bearer ${IONOS_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: IONOS_CHAT_MODEL,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            ...validated.messages,
-          ],
-          max_tokens: 300,
-          temperature: 0.8,
-        }),
+        headers: request.headers,
+        body: request.body,
       }),
       CHAT_TIMEOUT_MS,
     );
 
     if (!response.ok) {
       const error = await response.text();
-      console.error('IONOS API error:', error);
+      console.error(`${CHAT_PROVIDER.id} API error:`, error);
       return res.status(response.status).json({ error: 'AI service error' });
     }
 
@@ -140,7 +148,8 @@ app.post('/api/chat', async (req, res) => {
     res.json({
       content,
       action,
-      model: IONOS_CHAT_MODEL
+      model: CHAT_PROVIDER.model,
+      provider: CHAT_PROVIDER.id
     });
 
   } catch (error) {
@@ -211,6 +220,10 @@ app.post('/api/tts', async (req, res) => {
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Production Coach API running on port ${PORT}`);
-  console.log(`IONOS Model Hub: ${IONOS_API_KEY ? 'configured' : 'NOT CONFIGURED'}`);
+  console.log(
+    CHAT_PROVIDER.id === 'none'
+      ? `Chat: NOT CONFIGURED - ${CHAT_PROVIDER.reason}`
+      : `Chat: ${CHAT_PROVIDER.id} / ${CHAT_PROVIDER.model} (max ${MAX_REPLY_TOKENS} tokens)`,
+  );
   console.log(`ElevenLabs: ${ELEVEN_LABS_API_KEY ? 'configured' : 'NOT CONFIGURED'}`);
 });

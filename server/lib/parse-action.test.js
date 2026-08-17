@@ -93,6 +93,50 @@ describe("parseActionFromResponse - suggestions it MUST NOT make", () => {
   })
 })
 
+describe("parseActionFromResponse - real replies from the live model", () => {
+  // Found in QA against gpt-5.4-mini. "start with" is how a coach most
+  // naturally makes a recommendation, and it produced no button at all.
+  it('treats "start with X" as a recommendation', () => {
+    const action = parseActionFromResponse(
+      "Since you've got no devices yet, start with a Beatbox 9 for harder hats.",
+    )
+
+    expect(action?.params.deviceType).toBe("beatbox9")
+  })
+
+  it("handles the other recommendation phrasings the coach uses", () => {
+    for (const [text, expected] of [
+      ["Go with a Heisenberg for that lead.", "heisenberg"],
+      ["Reach for a Bassline to fill the low end.", "bassline"],
+      ["Put a Machiniste on the breaks.", "machiniste"],
+      ["Bring in a Beatbox 8 for the intro.", "beatbox8"],
+      ["Layer in a Tonematrix under the pad.", "tonematrix"],
+    ]) {
+      expect(parseActionFromResponse(text)?.params.deviceType, text).toBe(expected)
+    }
+  })
+
+  it('does not treat "the drop" as an instruction to drop a device in', () => {
+    // In production coaching "drop" is overwhelmingly a noun - the drop
+    // section. Reading it as a verb makes any sentence about the drop that
+    // also names a device produce a spurious Add button.
+    expect(
+      parseActionFromResponse("For a trap drop that feels empty, your bassline is probably fine."),
+    ).toBeNull()
+    expect(
+      parseActionFromResponse("The drop is where your Heisenberg is sitting too quietly."),
+    ).toBeNull()
+  })
+
+  it("picks the device the coach led with when several are listed", () => {
+    const action = parseActionFromResponse(
+      "Start with a Beatbox 9 for harder hats, a Bassline for the 808, and maybe a Machiniste layer.",
+    )
+
+    expect(action?.params.deviceType).toBe("beatbox9")
+  })
+})
+
 describe("parseActionFromResponse - robustness", () => {
   it("does not throw on empty, missing or non-string input", () => {
     for (const input of ["", null, undefined, 42, {}]) {
