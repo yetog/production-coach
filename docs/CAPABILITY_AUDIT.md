@@ -21,8 +21,8 @@
 
 | Feature | Status | Priority | Issue |
 |---------|--------|----------|-------|
-| **Drums/Beats** | ❌ Missing | HIGH | #28 |
-| **Arrangement** | ❌ Missing | HIGH | #28 |
+| **Drums/Beats** | ✅ Working | - | Implemented |
+| **Arrangement** | ✅ Partial | MEDIUM | Duration/range syntax added |
 | **FX/Effects** | ❌ Missing | MEDIUM | #28 |
 | **Automation** | ❌ Missing | MEDIUM | #28 |
 | **Mix Moves** | ❌ Missing | LOW | #28 |
@@ -31,21 +31,46 @@
 
 ## Can a User Make a Full Song?
 
-**Short answer: Not yet.**
+**Short answer: Almost!**
 
-A user can currently:
+A user CAN now:
 1. Get coaching advice from Dr. Zay
 2. Add bass lines (808)
 3. Add melodies with scales
 4. Add chord progressions
-5. Add individual synth devices
+5. Add drum patterns (trap, house, hip-hop, etc.)
+6. Specify exact duration: "for 32 bars"
+7. Specify bar ranges: "from bars 1-32"
+8. Add individual synth devices
 
 A user CANNOT yet:
-1. Add drum patterns (kick, snare, hihat)
-2. Structure a song (intro, verse, chorus, drop)
-3. Add effects (reverb, delay, compression)
-4. Create automation (filter sweeps, risers)
-5. Do hands-free voice commands (push-to-talk)
+1. Copy/duplicate existing content
+2. Add effects (reverb, delay, compression)
+3. Create automation (filter sweeps, risers)
+4. Do hands-free voice commands (push-to-talk)
+
+## Arrangement Features (NEW)
+
+**Explicit Duration:**
+```
+add trap drums for 32 bars at bar 1
+add melody in C major for 16 bars
+add 808 for 32 bars
+```
+
+**Bar Ranges:**
+```
+add drums from bars 1-32
+add chords in Am from bars 17-32
+add melody from bar 1 to bar 16
+```
+
+**Song Structure Templates (Ready for future use):**
+- EDM: intro → breakdown → drop → breakdown → drop → outro (64 bars)
+- Hip-hop: intro → verse → chorus → verse → chorus → outro (56 bars)
+- Pop: intro → verse → prechorus → chorus → verse → prechorus → chorus → bridge → chorus → outro (72 bars)
+- Simple: intro → verse → chorus → outro (48 bars)
+- Loop: intro → drop → outro (24 bars)
 
 ## What's Needed for MVP "Full Song"
 

@@ -40,6 +40,10 @@ import {
   parseGenre,
   type DrumPattern,
 } from "./drum-patterns.js"
+import {
+  parseExplicitDuration,
+  parseBarRange,
+} from "./arrangement.js"
 
 /** Default span when the user names a bar but no length. */
 const DEFAULT_BARS = 16
@@ -90,7 +94,18 @@ export function planCommand(command: string, session: SessionReport): Plan {
   }
 
   const explicitBar = explicitBarFrom(text)
+  const explicitDuration = parseExplicitDuration(text)
+  const barRange = parseBarRange(text)
   const tone = toneFrom(text)
+
+  // Check for explicit bar range first (e.g., "808 from bars 1-32")
+  if (barRange !== undefined) {
+    return build808Plan(command, tone, {
+      startBar: barRange.startBar,
+      endBar: barRange.endBar,
+      confidence: 1,
+    })
+  }
 
   if (explicitBar !== undefined) {
     // An explicitly named bar is the user's own instruction: trust it fully,
@@ -103,12 +118,23 @@ export function planCommand(command: string, session: SessionReport): Plan {
         { startBar: explicitBar, endBar: explicitBar, confidence: 1 },
       )
     }
+    // Use explicit duration if specified, otherwise default
+    const duration = explicitDuration ?? DEFAULT_BARS
     return build808Plan(command, tone, {
       startBar: explicitBar,
       endBar: Math.min(
-        explicitBar + DEFAULT_BARS - 1,
-        session.lengthBars > 0 ? session.lengthBars : explicitBar + DEFAULT_BARS - 1,
+        explicitBar + duration - 1,
+        session.lengthBars > 0 ? session.lengthBars : explicitBar + duration - 1,
       ),
+      confidence: 1,
+    })
+  }
+
+  // If only duration specified without bar, start at bar 1
+  if (explicitDuration !== undefined) {
+    return build808Plan(command, tone, {
+      startBar: 1,
+      endBar: explicitDuration,
       confidence: 1,
     })
   }
@@ -270,9 +296,9 @@ function unknownCommand(command: string): Plan {
     actions: [],
     summary:
       `I cannot do "${command}" yet. Try commands like:\n` +
-      `• "add trap drums at bar 1"\n` +
-      `• "add a melody in C major"\n` +
-      `• "add jazzy chords in Am"\n` +
+      `• "add trap drums for 32 bars at bar 1"\n` +
+      `• "add a melody in C major for 16 bars"\n` +
+      `• "add jazzy chords in Am from bars 1-32"\n` +
       `• "add a dark 808 under the drop"`,
     safety: "creates_only",
     verification: [],
@@ -406,6 +432,17 @@ interface ResolvedTarget extends PlanTarget {
 
 function resolveTarget(text: string, session: SessionReport): ResolvedTarget {
   const explicitBar = explicitBarFrom(text)
+  const explicitDuration = parseExplicitDuration(text)
+  const barRange = parseBarRange(text)
+
+  // Check for explicit bar range first (e.g., "bars 1-32")
+  if (barRange !== undefined) {
+    return {
+      startBar: barRange.startBar,
+      endBar: barRange.endBar,
+      confidence: 1,
+    }
+  }
 
   if (explicitBar !== undefined) {
     if (session.lengthBars > 0 && explicitBar > session.lengthBars) {
@@ -417,12 +454,23 @@ function resolveTarget(text: string, session: SessionReport): ResolvedTarget {
         clarification: `Bar ${explicitBar} is beyond the end of this project (${session.lengthBars} bars). Which bar did you mean?`,
       }
     }
+    // Use explicit duration if specified, otherwise default
+    const duration = explicitDuration ?? DEFAULT_BARS
     return {
       startBar: explicitBar,
       endBar: Math.min(
-        explicitBar + DEFAULT_BARS - 1,
-        session.lengthBars > 0 ? session.lengthBars : explicitBar + DEFAULT_BARS - 1,
+        explicitBar + duration - 1,
+        session.lengthBars > 0 ? session.lengthBars : explicitBar + duration - 1,
       ),
+      confidence: 1,
+    }
+  }
+
+  // If only duration specified without bar, start at bar 1
+  if (explicitDuration !== undefined) {
+    return {
+      startBar: 1,
+      endBar: explicitDuration,
       confidence: 1,
     }
   }
