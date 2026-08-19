@@ -18,6 +18,7 @@ export type PlanIntent =
   | "add_device"
   | "add_melody"
   | "add_chords"
+  | "add_drums"
   | "preview_only"
   | "unknown"
 
@@ -56,6 +57,13 @@ export type PlanAction =
       voicing: ChordVoicing
       velocity: number
       chordsPerBar: number
+    }
+  | {
+      type: "create_drum_notes"
+      /** Array of drum hits: [piece MIDI note, position in 16ths, velocity] */
+      hits: Array<{ pitch: number; position: number; velocity: number }>
+      /** Pattern name for display */
+      patternName: string
     }
 
 export type ToneHint = "dark" | "bright" | "neutral"

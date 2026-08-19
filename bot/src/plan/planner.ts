@@ -33,6 +33,13 @@ import {
   type KeySignature,
   type ProgressionName,
 } from "./music-theory.js"
+import {
+  DRUM_NOTES,
+  getPattern,
+  getPatternForGenre,
+  parseGenre,
+  type DrumPattern,
+} from "./drum-patterns.js"
 
 /** Default span when the user names a bar but no length. */
 const DEFAULT_BARS = 16
@@ -65,6 +72,11 @@ export function planCommand(command: string, session: SessionReport): Plan {
   // Check for chord commands
   if (mentionsChords(text)) {
     return buildChordPlan(command, text, session)
+  }
+
+  // Check for drum commands
+  if (mentionsDrums(text)) {
+    return buildDrumPlan(command, text, session)
   }
 
   if (!mentions808(text)) {
@@ -257,8 +269,11 @@ function unknownCommand(command: string): Plan {
     target: { startBar: 0, endBar: 0, confidence: 0 },
     actions: [],
     summary:
-      `I cannot do "${command}" yet. Right now I can add an 808 to a section or a ` +
-      `named bar - try "add a dark 808 under the drop".`,
+      `I cannot do "${command}" yet. Try commands like:\n` +
+      `• "add trap drums at bar 1"\n` +
+      `• "add a melody in C major"\n` +
+      `• "add jazzy chords in Am"\n` +
+      `• "add a dark 808 under the drop"`,
     safety: "creates_only",
     verification: [],
     requiresConfirmation: true,
@@ -683,5 +698,122 @@ function needsAnswerForChords(command: string, target: ResolvedTarget): Plan {
     verification: [],
     requiresConfirmation: true,
     clarification: "What key would you like the chords in? (e.g., C major, Am, F# minor)",
+  }
+}
+
+// ============================================================================
+// Drum Support
+// ============================================================================
+
+function mentionsDrums(text: string): boolean {
+  // Don't match "beatbox 8" or "beatbox 9" - those are device adds, not drum patterns
+  if (/\bbeatbox\s*\d\b/.test(text)) return false
+  // Match drum-related keywords
+  return /\b(drums?|beat|kick|snare|hi[\s-]?hat|rhythm|percussion)\b/.test(text)
+}
+
+/**
+ * Extract drum pattern name or genre from command text.
+ */
+function extractDrumPattern(text: string): DrumPattern | undefined {
+  // Check for specific pattern names
+  const patternMatches = [
+    /\b(trap|minimal\s*trap)\b/,
+    /\b(house|deep\s*house|four[\s-]?on[\s-]?the[\s-]?floor)\b/,
+    /\b(hip[\s-]?hop|boom\s*bap)\b/,
+    /\b(lo[\s-]?fi|chill(?:hop)?)\b/,
+    /\b(rock|driving)\b/,
+    /\b(pop)\b/,
+    /\b(drill|uk\s*drill)\b/,
+    /\b(dnb|drum\s*(and|&|n)\s*bass)\b/,
+    /\b(techno)\b/,
+  ]
+
+  for (const regex of patternMatches) {
+    const match = regex.exec(text)
+    if (match !== null) {
+      const pattern = getPattern(match[1]!)
+      if (pattern !== undefined) return pattern
+    }
+  }
+
+  // Check for genre hint
+  const genre = parseGenre(text)
+  if (genre !== undefined) {
+    return getPatternForGenre(genre)
+  }
+
+  return undefined
+}
+
+/**
+ * Build a drum pattern plan.
+ */
+function buildDrumPlan(command: string, text: string, session: SessionReport): Plan {
+  const target = resolveTarget(text, session)
+  const pattern = extractDrumPattern(text)
+
+  // If target is uncertain, ask for confirmation
+  if (target.requiresConfirmation) {
+    return {
+      planId: planId("clarify_drums", target),
+      command,
+      intent: "add_drums",
+      interpretedIntent: "Add drums, but the target section is not settled yet",
+      target,
+      actions: [],
+      summary: target.clarification!,
+      safety: "creates_only",
+      verification: [],
+      requiresConfirmation: true,
+      clarification: target.clarification,
+    }
+  }
+
+  // Use basic pattern if none specified
+  const drumPattern = pattern ?? getPattern("basic")!
+  const durationBars = Math.max(1, target.endBar - target.startBar + 1)
+
+  // Convert pattern hits to the action format
+  const hits = drumPattern.hits.map((hit) => ({
+    pitch: DRUM_NOTES[hit.piece],
+    position: hit.position,
+    velocity: hit.velocity,
+  }))
+
+  const actions: PlanAction[] = [
+    { type: "create_source", deviceType: "beatbox9", displayName: `Agent ${drumPattern.name}` },
+    { type: "route_to_mixer", deviceType: "beatbox9" },
+    { type: "create_note_track", displayName: `Agent ${drumPattern.name}` },
+    { type: "create_note_region", startBar: target.startBar, durationBars },
+    {
+      type: "create_drum_notes",
+      hits,
+      patternName: drumPattern.name,
+    },
+  ]
+
+  const where =
+    target.section !== undefined
+      ? `the ${target.section} (bars ${target.startBar}-${target.endBar})`
+      : `bars ${target.startBar}-${target.endBar}`
+
+  return {
+    planId: planId("add_drums", target),
+    command,
+    intent: "add_drums",
+    interpretedIntent: `Add a ${drumPattern.name} drum pattern over ${where}`,
+    target,
+    actions,
+    summary:
+      `I will add a Beatbox 9 playing a ${drumPattern.name} pattern (${drumPattern.genre}) ` +
+      `across bars ${target.startBar}-${target.endBar}, routed to the mixer.`,
+    safety: "creates_only",
+    verification: [
+      { kind: "entities_exist", description: "drum machine, track, region, and notes" },
+      { kind: "entity_count", entityType: "note", atLeast: hits.length },
+      { kind: "routed_to_mixer", description: "the drum machine reaches a mixer channel" },
+    ],
+    requiresConfirmation: false,
   }
 }

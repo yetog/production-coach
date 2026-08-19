@@ -79,6 +79,8 @@ function describeAction(action: PlanAction): string {
       return `place a ${action.pattern} melodic pattern with ${action.noteDuration} notes across ${action.pitches.length} scale tones (velocity ${action.velocity})`
     case "create_chord_notes":
       return `place ${action.chords.length} chords with ${action.voicing} voicing, ${action.chordsPerBar} per bar (velocity ${action.velocity})`
+    case "create_drum_notes":
+      return `place a ${action.patternName} drum pattern with ${action.hits.length} hits per bar`
   }
 }
 

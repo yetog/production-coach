@@ -65,6 +65,9 @@ export async function executePlan(
   const chordNotes = plan.actions.find((a) => a.type === "create_chord_notes") as
     | Extract<PlanAction, { type: "create_chord_notes" }>
     | undefined
+  const drumNotes = plan.actions.find((a) => a.type === "create_drum_notes") as
+    | Extract<PlanAction, { type: "create_drum_notes" }>
+    | undefined
   const track = plan.actions.find((a) => a.type === "create_note_track")
 
   if (source === undefined) {
@@ -77,7 +80,7 @@ export async function executePlan(
 
   // A device add (#28) creates routed gear and stops there. Anything that
   // writes to the timeline needs a region + some kind of notes.
-  const hasAnyNotes = notes !== undefined || melodyNotes !== undefined || chordNotes !== undefined
+  const hasAnyNotes = notes !== undefined || melodyNotes !== undefined || chordNotes !== undefined || drumNotes !== undefined
   const placesMaterial = region !== undefined || hasAnyNotes
   if (placesMaterial && (region === undefined || !hasAnyNotes)) {
     throw new Error(
@@ -105,6 +108,9 @@ export async function executePlan(
   } else if (chordNotes !== undefined && region !== undefined) {
     // Chords: multiple simultaneous pitches
     notePositions = chordPositions(chordNotes, durationTicks, ticksPerBar)
+  } else if (drumNotes !== undefined && region !== undefined) {
+    // Drums: pattern-based with multiple pieces
+    notePositions = drumPositions(drumNotes, durationTicks, ticksPerBar)
   }
 
   const trackOrder = nextTrackOrder(doc)
@@ -153,8 +159,9 @@ export async function executePlan(
       })
       created.push(noteRegion.id)
 
-      // Get velocity from whichever note action is active
+      // Get velocity from whichever note action is active (drums use per-hit velocity)
       const velocity = notes?.velocity ?? melodyNotes?.velocity ?? chordNotes?.velocity ?? 0.75
+      const usesPerHitVelocity = drumNotes !== undefined
 
       for (const position of notePositions) {
         const note = tx.create("note", {
@@ -162,7 +169,8 @@ export async function executePlan(
           pitch: position.pitch,
           positionTicks: startTicks + position.positionTicks,
           durationTicks: position.durationTicks,
-          velocity,
+          // Drums use per-hit velocity from the pattern, others use global velocity
+          velocity: usesPerHitVelocity && "velocity" in position ? (position as { velocity: number }).velocity : velocity,
         })
         created.push(note.id)
       }
@@ -401,6 +409,49 @@ function chordPositions(
       }
 
       chordIndex++
+    }
+  }
+
+  return positions
+}
+
+// ============================================================================
+// Drum Note Generation
+// ============================================================================
+
+type DrumNotePosition = { pitch: number; positionTicks: number; durationTicks: number; velocity: number }
+
+/**
+ * Generate note positions for a drum pattern.
+ *
+ * Repeats the one-bar pattern across all bars in the region.
+ * Each hit has its own velocity for dynamic patterns.
+ */
+function drumPositions(
+  action: Extract<PlanAction, { type: "create_drum_notes" }>,
+  durationTicks: number,
+  ticksPerBar: number,
+): DrumNotePosition[] {
+  const positions: DrumNotePosition[] = []
+  const { hits } = action
+
+  if (hits.length === 0) return positions
+
+  const bars = Math.max(1, Math.round(durationTicks / ticksPerBar))
+  const sixteenthTicks = ticksPerBar / 16
+
+  // Repeat the pattern for each bar
+  for (let bar = 0; bar < bars; bar++) {
+    const barStartTicks = bar * ticksPerBar
+
+    for (const hit of hits) {
+      positions.push({
+        pitch: hit.pitch,
+        positionTicks: barStartTicks + hit.position * sixteenthTicks,
+        // Drums are typically short hits (1/16th note)
+        durationTicks: sixteenthTicks,
+        velocity: hit.velocity,
+      })
     }
   }
 
