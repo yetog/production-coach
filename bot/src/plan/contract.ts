@@ -13,7 +13,13 @@
  * possible at all.
  */
 
-export type PlanIntent = "add_808" | "add_device" | "preview_only" | "unknown"
+export type PlanIntent =
+  | "add_808"
+  | "add_device"
+  | "add_melody"
+  | "add_chords"
+  | "preview_only"
+  | "unknown"
 
 /** How much damage a plan could do, for the confirmation gate in #22. */
 export type SafetyLevel = "creates_only" | "modifies_existing" | "destructive"
@@ -37,15 +43,50 @@ export type PlanAction =
   | { type: "create_note_track"; displayName: string }
   | { type: "create_note_region"; startBar: number; durationBars: number }
   | { type: "create_notes"; pitch: number; pattern: NotePattern; velocity: number }
+  | {
+      type: "create_melody_notes"
+      pitches: number[]
+      pattern: MelodicPattern
+      velocity: number
+      noteDuration: NoteDuration
+    }
+  | {
+      type: "create_chord_notes"
+      chords: number[][]
+      voicing: ChordVoicing
+      velocity: number
+      chordsPerBar: number
+    }
 
 export type ToneHint = "dark" | "bright" | "neutral"
 export type NotePattern = "downbeats" | "eighths" | "sustained"
+
+/** Melodic pattern for melody generation */
+export type MelodicPattern = "ascending" | "descending" | "wave" | "random"
+
+/** Chord voicing style */
+export type ChordVoicing = "block" | "arpeggiated" | "broken"
+
+/** Note duration for melodies */
+export type NoteDuration = "eighth" | "quarter" | "half"
 
 /** A check `verify` runs after apply. Kept declarative so it is replayable. */
 export type VerificationCheck =
   | { kind: "entities_exist"; description: string }
   | { kind: "entity_count"; entityType: string; atLeast: number }
   | { kind: "routed_to_mixer"; description: string }
+
+/** Key/scale/progression hints for melody and chord plans */
+export interface HarmonyHint {
+  /** Key string, e.g., "C major", "Am" */
+  key?: string
+  /** Scale type if different from key's natural scale */
+  scale?: string
+  /** Progression name or Roman numerals */
+  progression?: string
+  /** True if key was detected from session rather than specified */
+  detected?: boolean
+}
 
 export interface Plan {
   /** Stable id derived from the command and target - not random, so plans dedupe. */
@@ -64,4 +105,6 @@ export interface Plan {
   requiresConfirmation: boolean
   /** The question to ask when the planner will not proceed unaided. */
   clarification?: string
+  /** Harmony information for melody/chord plans */
+  harmony?: HarmonyHint
 }

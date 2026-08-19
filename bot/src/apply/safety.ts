@@ -75,6 +75,10 @@ function describeAction(action: PlanAction): string {
       return `create a ${action.durationBars}-bar region starting at bar ${action.startBar}`
     case "create_notes":
       return `place ${action.pattern} notes at pitch ${action.pitch} (velocity ${action.velocity})`
+    case "create_melody_notes":
+      return `place a ${action.pattern} melodic pattern with ${action.noteDuration} notes across ${action.pitches.length} scale tones (velocity ${action.velocity})`
+    case "create_chord_notes":
+      return `place ${action.chords.length} chords with ${action.voicing} voicing, ${action.chordsPerBar} per bar (velocity ${action.velocity})`
   }
 }
 

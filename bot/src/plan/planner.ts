@@ -13,13 +13,26 @@ import type { SessionReport } from "../analyze/analyzer.js"
 import { CONFIDENCE_THRESHOLD } from "../analyze/sections.js"
 import { resolveDeviceName } from "./device-names.js"
 import type {
+  ChordVoicing,
+  MelodicPattern,
   NotePattern,
+  NoteDuration,
   Plan,
   PlanAction,
   PlanTarget,
   ToneHint,
   VerificationCheck,
 } from "./contract.js"
+import {
+  buildChordProgression,
+  getProgressionRoman,
+  getScaleNotes,
+  parseKey,
+  parseRomanNumerals,
+  PROGRESSIONS,
+  type KeySignature,
+  type ProgressionName,
+} from "./music-theory.js"
 
 /** Default span when the user names a bar but no length. */
 const DEFAULT_BARS = 16
@@ -27,8 +40,32 @@ const DEFAULT_BARS = 16
 /** C1 - where an 808 sub actually lives. 60 is C4. */
 const PITCH_808 = 24
 
+/** C4 - lead melodies sit in a comfortable range */
+const MELODY_OCTAVE = 60
+
+/** C3 - chords sit below melodies */
+const CHORD_OCTAVE = 48
+
+/** Default key when user doesn't specify and we don't want to ask */
+const DEFAULT_KEY: KeySignature = {
+  root: "C",
+  rootPitch: 60,
+  mode: "major",
+  scale: [0, 2, 4, 5, 7, 9, 11],
+}
+
 export function planCommand(command: string, session: SessionReport): Plan {
   const text = command.toLowerCase().trim()
+
+  // Check for melody commands first (before 808 check, since "add melody" != 808)
+  if (mentionsMelody(text)) {
+    return buildMelodyPlan(command, text, session)
+  }
+
+  // Check for chord commands
+  if (mentionsChords(text)) {
+    return buildChordPlan(command, text, session)
+  }
 
   if (!mentions808(text)) {
     // "add a beatbox 9" - a device add, which is a different action from the
@@ -257,4 +294,394 @@ function toneFrom(text: string): ToneHint {
  */
 function planId(kind: string, target: PlanTarget): string {
   return `${kind}-${target.startBar}-${target.endBar}`
+}
+
+// ============================================================================
+// Melody and Chord Support (issue #29)
+// ============================================================================
+
+function mentionsMelody(text: string): boolean {
+  return /\b(melody|melodic|lead|riff|hook|synth\s*lead)\b/.test(text)
+}
+
+function mentionsChords(text: string): boolean {
+  return /\b(chord|chords|harmony|harmonic|progression|pads?)\b/.test(text)
+}
+
+/**
+ * Extract key from command text, or return undefined to trigger a question.
+ *
+ * Accepts: "in C major", "in Am", "key of F#", "in D minor"
+ */
+function extractKey(text: string): KeySignature | undefined {
+  const keyMatch = /(?:in|key\s+of)\s+([A-G][#b]?\s*(?:m(?:in(?:or)?)?|maj(?:or)?)?)/i.exec(text)
+  if (keyMatch !== null) {
+    const parsed = parseKey(keyMatch[1]!)
+    if (parsed !== undefined) return parsed
+  }
+  return undefined
+}
+
+/**
+ * Extract progression style from command text.
+ */
+function extractProgression(text: string): ProgressionName {
+  if (/\b(jazz|jazzy|smooth)\b/.test(text)) return "jazz"
+  if (/\b(blues|bluesy)\b/.test(text)) return "blues"
+  if (/\b(sad|melancholic|emotional)\b/.test(text)) return "sad"
+  if (/\b(rock|powerful|driving)\b/.test(text)) return "rock"
+  if (/\b(50s|fifties|oldies|doo-?wop)\b/.test(text)) return "fifties"
+  return "pop" // default
+}
+
+/**
+ * Extract custom Roman numeral progression from command text.
+ *
+ * Accepts: "I-IV-V-I chords", "add vi-IV-I-V"
+ */
+function extractCustomProgression(text: string): number[] | undefined {
+  // Look for Roman numerals pattern
+  const romanMatch = /\b([IiVv]+(?:[-\s,][IiVv]+)+)\b/.exec(text)
+  if (romanMatch !== null) {
+    return parseRomanNumerals(romanMatch[1]!)
+  }
+  return undefined
+}
+
+/**
+ * Extract chord voicing style from command text.
+ */
+function extractVoicing(text: string): ChordVoicing {
+  if (/\b(arp(?:eggiat)?ed?|rolling)\b/.test(text)) return "arpeggiated"
+  if (/\b(broken|spread)\b/.test(text)) return "broken"
+  return "block" // default for pads
+}
+
+/**
+ * Extract melodic pattern from command text.
+ */
+function extractMelodicPattern(text: string): MelodicPattern {
+  if (/\b(ascending|rise|rising|up)\b/.test(text)) return "ascending"
+  if (/\b(descending|fall|falling|down)\b/.test(text)) return "descending"
+  if (/\b(random|chaotic)\b/.test(text)) return "random"
+  return "wave" // default
+}
+
+/**
+ * Extract section name from command text.
+ */
+type SectionLabel = "intro" | "build" | "drop" | "breakdown" | "outro"
+
+function extractSectionName(text: string): SectionLabel | undefined {
+  if (/\b(intro|introduction)\b/.test(text)) return "intro"
+  if (/\b(build(?:up)?|rise)\b/.test(text)) return "build"
+  if (/\b(drop|chorus|peak)\b/.test(text)) return "drop"
+  if (/\b(break(?:down)?)\b/.test(text)) return "breakdown"
+  if (/\b(outro|ending)\b/.test(text)) return "outro"
+  return undefined
+}
+
+/**
+ * Resolve the target section from command text and session analysis.
+ */
+interface ResolvedTarget extends PlanTarget {
+  requiresConfirmation?: boolean
+  clarification?: string
+}
+
+function resolveTarget(text: string, session: SessionReport): ResolvedTarget {
+  const explicitBar = explicitBarFrom(text)
+
+  if (explicitBar !== undefined) {
+    if (session.lengthBars > 0 && explicitBar > session.lengthBars) {
+      return {
+        startBar: explicitBar,
+        endBar: explicitBar,
+        confidence: 0,
+        requiresConfirmation: true,
+        clarification: `Bar ${explicitBar} is beyond the end of this project (${session.lengthBars} bars). Which bar did you mean?`,
+      }
+    }
+    return {
+      startBar: explicitBar,
+      endBar: Math.min(
+        explicitBar + DEFAULT_BARS - 1,
+        session.lengthBars > 0 ? session.lengthBars : explicitBar + DEFAULT_BARS - 1,
+      ),
+      confidence: 1,
+    }
+  }
+
+  // Check for section names in command
+  const sectionName = extractSectionName(text)
+  if (sectionName !== undefined) {
+    const section = session.sections.find((s) => s.label === sectionName)
+    if (section !== undefined) {
+      return {
+        section: section.label,
+        startBar: section.startBar,
+        endBar: section.endBar,
+        confidence: section.confidence,
+        requiresConfirmation: section.confidence < CONFIDENCE_THRESHOLD,
+        clarification:
+          section.confidence < CONFIDENCE_THRESHOLD
+            ? `I think the ${section.label} is bars ${section.startBar}-${section.endBar}, but I am not confident. Should I use those bars?`
+            : undefined,
+      }
+    }
+  }
+
+  // Fall back to drop detection
+  const drop = session.drop
+  if (drop === undefined) {
+    return {
+      startBar: 0,
+      endBar: 0,
+      confidence: 0,
+      requiresConfirmation: true,
+      clarification: "I could not find a clear section. Which bars should I work with?",
+    }
+  }
+
+  return {
+    section: drop.label,
+    startBar: drop.startBar,
+    endBar: drop.endBar,
+    confidence: drop.confidence,
+    requiresConfirmation: drop.confidence < CONFIDENCE_THRESHOLD,
+    clarification:
+      drop.confidence < CONFIDENCE_THRESHOLD
+        ? `I think the ${drop.label} is bars ${drop.startBar}-${drop.endBar}, but I am not confident. Should I use those bars?`
+        : undefined,
+  }
+}
+
+/**
+ * Build a melody plan.
+ */
+function buildMelodyPlan(command: string, text: string, session: SessionReport): Plan {
+  const key = extractKey(text)
+  const tone = toneFrom(text)
+  const target = resolveTarget(text, session)
+  const pattern = extractMelodicPattern(text)
+
+  // If no key specified, ask the user
+  if (key === undefined) {
+    return needsAnswerForMelody(command, target)
+  }
+
+  // If target is uncertain, ask for confirmation
+  if (target.requiresConfirmation) {
+    return {
+      planId: planId("clarify_melody", target),
+      command,
+      intent: "add_melody",
+      interpretedIntent: `Add a melody in ${key.root} ${key.mode}, but the target section is not settled yet`,
+      target,
+      actions: [],
+      summary: target.clarification!,
+      safety: "creates_only",
+      verification: [],
+      requiresConfirmation: true,
+      clarification: target.clarification,
+      harmony: { key: `${key.root} ${key.mode}` },
+    }
+  }
+
+  const durationBars = Math.max(1, target.endBar - target.startBar + 1)
+  // Get scale notes spanning 2 octaves for melodic variety
+  const pitches = getScaleNotes(key.rootPitch, key.scale, 2)
+
+  // Select device based on tone
+  const deviceType = tone === "dark" ? "pulverisateur" : "heisenberg"
+  const toneLabel = tone === "neutral" ? "" : `${tone.charAt(0).toUpperCase()}${tone.slice(1)} `
+  const displayName = `Agent ${toneLabel}Lead`
+
+  const actions: PlanAction[] = [
+    { type: "create_source", deviceType, displayName, tone },
+    { type: "route_to_mixer", deviceType },
+    { type: "create_note_track", displayName },
+    { type: "create_note_region", startBar: target.startBar, durationBars },
+    {
+      type: "create_melody_notes",
+      pitches,
+      pattern,
+      velocity: 0.75,
+      noteDuration: "eighth",
+    },
+  ]
+
+  const where =
+    target.section !== undefined
+      ? `the ${target.section} (bars ${target.startBar}-${target.endBar})`
+      : `bars ${target.startBar}-${target.endBar}`
+
+  return {
+    planId: planId("add_melody", target),
+    command,
+    intent: "add_melody",
+    interpretedIntent: `Add a ${tone === "neutral" ? "" : tone + " "}melody in ${key.root} ${key.mode} over ${where}`,
+    target,
+    actions,
+    summary:
+      `I will add a ${deviceType} synth lead playing a ${pattern} melodic pattern in ${key.root} ${key.mode} ` +
+      `across bars ${target.startBar}-${target.endBar}, routed to the mixer.`,
+    safety: "creates_only",
+    verification: [
+      { kind: "entities_exist", description: "synth device, track, region, and notes" },
+      { kind: "entity_count", entityType: "note", atLeast: 4 },
+      { kind: "routed_to_mixer", description: "the lead synth reaches a mixer channel" },
+    ],
+    requiresConfirmation: false,
+    harmony: { key: `${key.root} ${key.mode}`, detected: false },
+  }
+}
+
+/**
+ * Ask the user for a key when creating a melody.
+ */
+function needsAnswerForMelody(command: string, target: ResolvedTarget): Plan {
+  return {
+    planId: planId("clarify_melody", target),
+    command,
+    intent: "add_melody",
+    interpretedIntent: "Add a melody, but the key is not specified yet",
+    target,
+    actions: [],
+    summary: "What key would you like the melody in? (e.g., C major, Am, F# minor)",
+    safety: "creates_only",
+    verification: [],
+    requiresConfirmation: true,
+    clarification: "What key would you like the melody in? (e.g., C major, Am, F# minor)",
+  }
+}
+
+/**
+ * Build a chord progression plan.
+ */
+function buildChordPlan(command: string, text: string, session: SessionReport): Plan {
+  const key = extractKey(text)
+  const tone = toneFrom(text)
+  const target = resolveTarget(text, session)
+  const voicing = extractVoicing(text)
+
+  // If no key specified, ask the user
+  if (key === undefined) {
+    return needsAnswerForChords(command, target)
+  }
+
+  // If target is uncertain, ask for confirmation
+  if (target.requiresConfirmation) {
+    return {
+      planId: planId("clarify_chords", target),
+      command,
+      intent: "add_chords",
+      interpretedIntent: `Add chords in ${key.root} ${key.mode}, but the target section is not settled yet`,
+      target,
+      actions: [],
+      summary: target.clarification!,
+      safety: "creates_only",
+      verification: [],
+      requiresConfirmation: true,
+      clarification: target.clarification,
+      harmony: { key: `${key.root} ${key.mode}` },
+    }
+  }
+
+  const durationBars = Math.max(1, target.endBar - target.startBar + 1)
+
+  // Check for custom Roman numeral progression first
+  const customProgression = extractCustomProgression(text)
+  let progressionDegrees: readonly number[]
+  let progressionName: ProgressionName | "custom"
+  let progressionRoman: string
+
+  if (customProgression !== undefined) {
+    progressionDegrees = customProgression
+    progressionName = "custom"
+    progressionRoman = customProgression
+      .map((d) => {
+        const romanMap: Record<number, string> =
+          key.mode === "major"
+            ? { 1: "I", 2: "ii", 3: "iii", 4: "IV", 5: "V", 6: "vi", 7: "vii°" }
+            : { 1: "i", 2: "ii°", 3: "III", 4: "iv", 5: "v", 6: "VI", 7: "VII" }
+        return romanMap[d] ?? String(d)
+      })
+      .join("-")
+  } else {
+    progressionName = extractProgression(text)
+    progressionDegrees = PROGRESSIONS[progressionName]
+    progressionRoman = getProgressionRoman(progressionName, key.mode)
+  }
+
+  // Build chord notes - use C3 octave (48) for pad-like sounds
+  const chords = buildChordProgression(CHORD_OCTAVE, key.scale, key.mode, progressionDegrees)
+
+  // Select device - pads work best on space; bright tones on heisenberg
+  const deviceType = tone === "bright" ? "heisenberg" : "space"
+  const displayName = `Agent ${progressionName === "custom" ? "Custom" : progressionName.charAt(0).toUpperCase() + progressionName.slice(1)} Chords`
+
+  const actions: PlanAction[] = [
+    { type: "create_source", deviceType, displayName, tone },
+    { type: "route_to_mixer", deviceType },
+    { type: "create_note_track", displayName },
+    { type: "create_note_region", startBar: target.startBar, durationBars },
+    {
+      type: "create_chord_notes",
+      chords,
+      voicing,
+      velocity: 0.7,
+      chordsPerBar: 1, // One chord per bar by default
+    },
+  ]
+
+  const where =
+    target.section !== undefined
+      ? `the ${target.section} (bars ${target.startBar}-${target.endBar})`
+      : `bars ${target.startBar}-${target.endBar}`
+
+  const voicingDesc = voicing === "block" ? "sustained pads" : voicing === "arpeggiated" ? "arpeggiated" : "broken"
+
+  return {
+    planId: planId("add_chords", target),
+    command,
+    intent: "add_chords",
+    interpretedIntent: `Add a ${progressionName} chord progression (${progressionRoman}) in ${key.root} ${key.mode} over ${where}`,
+    target,
+    actions,
+    summary:
+      `I will add a ${deviceType} playing a ${progressionName} progression (${progressionRoman}) in ${key.root} ${key.mode} ` +
+      `across bars ${target.startBar}-${target.endBar}. The chords will be ${voicingDesc}.`,
+    safety: "creates_only",
+    verification: [
+      { kind: "entities_exist", description: "synth device, track, region, and chord notes" },
+      { kind: "entity_count", entityType: "note", atLeast: chords.length * chords[0]!.length },
+      { kind: "routed_to_mixer", description: "the chord synth reaches a mixer channel" },
+    ],
+    requiresConfirmation: false,
+    harmony: {
+      key: `${key.root} ${key.mode}`,
+      progression: progressionRoman,
+      detected: false,
+    },
+  }
+}
+
+/**
+ * Ask the user for a key when creating chords.
+ */
+function needsAnswerForChords(command: string, target: ResolvedTarget): Plan {
+  return {
+    planId: planId("clarify_chords", target),
+    command,
+    intent: "add_chords",
+    interpretedIntent: "Add chords, but the key is not specified yet",
+    target,
+    actions: [],
+    summary: "What key would you like the chords in? (e.g., C major, Am, F# minor)",
+    safety: "creates_only",
+    verification: [],
+    requiresConfirmation: true,
+    clarification: "What key would you like the chords in? (e.g., C major, Am, F# minor)",
+  }
 }

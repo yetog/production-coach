@@ -17,7 +17,14 @@
  *     for undo.
  */
 import { Ticks } from "@audiotool/nexus/utils"
-import type { NotePattern, Plan } from "../plan/contract.js"
+import type {
+  ChordVoicing,
+  MelodicPattern,
+  NotePattern,
+  NoteDuration,
+  Plan,
+  PlanAction,
+} from "../plan/contract.js"
 import { assertAudioRoutable } from "../routing.js"
 
 export interface ExecuteResult {
@@ -52,6 +59,12 @@ export async function executePlan(
   const source = plan.actions.find((a) => a.type === "create_source")
   const region = plan.actions.find((a) => a.type === "create_note_region")
   const notes = plan.actions.find((a) => a.type === "create_notes")
+  const melodyNotes = plan.actions.find((a) => a.type === "create_melody_notes") as
+    | Extract<PlanAction, { type: "create_melody_notes" }>
+    | undefined
+  const chordNotes = plan.actions.find((a) => a.type === "create_chord_notes") as
+    | Extract<PlanAction, { type: "create_chord_notes" }>
+    | undefined
   const track = plan.actions.find((a) => a.type === "create_note_track")
 
   if (source === undefined) {
@@ -63,10 +76,10 @@ export async function executePlan(
   const outputSocket = assertAudioRoutable(source.deviceType)
 
   // A device add (#28) creates routed gear and stops there. Anything that
-  // writes to the timeline needs the full region + notes pair; half of one is
-  // a partial action and worse than none.
-  const placesMaterial = region !== undefined || notes !== undefined
-  if (placesMaterial && (region === undefined || notes === undefined)) {
+  // writes to the timeline needs a region + some kind of notes.
+  const hasAnyNotes = notes !== undefined || melodyNotes !== undefined || chordNotes !== undefined
+  const placesMaterial = region !== undefined || hasAnyNotes
+  if (placesMaterial && (region === undefined || !hasAnyNotes)) {
     throw new Error(
       "Plan has a region without notes, or notes without a region - refusing to apply a partial action.",
     )
@@ -75,10 +88,25 @@ export async function executePlan(
   const ticksPerBar = ticksPerBarOf(doc)
   const startTicks = region === undefined ? 0 : (region.startBar - 1) * ticksPerBar
   const durationTicks = region === undefined ? 0 : region.durationBars * ticksPerBar
-  const notePositions =
-    notes === undefined || region === undefined
-      ? []
-      : patternPositions(notes.pattern, durationTicks, ticksPerBar)
+
+  // Determine which note generator to use
+  type NotePosition = { pitch: number; positionTicks: number; durationTicks: number }
+  let notePositions: NotePosition[] = []
+
+  if (notes !== undefined && region !== undefined) {
+    // Original 808-style: single pitch, pattern-based
+    notePositions = patternPositions(notes.pattern, durationTicks, ticksPerBar).map((pos) => ({
+      pitch: notes.pitch,
+      ...pos,
+    }))
+  } else if (melodyNotes !== undefined && region !== undefined) {
+    // Melody: multiple pitches, melodic pattern
+    notePositions = melodyPositions(melodyNotes, durationTicks, ticksPerBar)
+  } else if (chordNotes !== undefined && region !== undefined) {
+    // Chords: multiple simultaneous pitches
+    notePositions = chordPositions(chordNotes, durationTicks, ticksPerBar)
+  }
+
   const trackOrder = nextTrackOrder(doc)
 
   // --- one transaction, all or nothing -------------------------------------
@@ -102,7 +130,7 @@ export async function executePlan(
     created.push(cable.id)
 
     // Device-only plans stop here: routed gear, nothing on the timeline.
-    if (region !== undefined && notes !== undefined) {
+    if (region !== undefined && notePositions.length > 0) {
       const noteTrack = tx.create("noteTrack", {
         player: device.location,
         // Unique across ALL track types: a duplicate throws, and per the wedge
@@ -125,13 +153,16 @@ export async function executePlan(
       })
       created.push(noteRegion.id)
 
+      // Get velocity from whichever note action is active
+      const velocity = notes?.velocity ?? melodyNotes?.velocity ?? chordNotes?.velocity ?? 0.75
+
       for (const position of notePositions) {
         const note = tx.create("note", {
           collection: collection.location,
-          pitch: notes.pitch,
+          pitch: position.pitch,
           positionTicks: startTicks + position.positionTicks,
           durationTicks: position.durationTicks,
-          velocity: notes.velocity,
+          velocity,
         })
         created.push(note.id)
       }
@@ -225,4 +256,153 @@ function nextTrackOrder(doc: ExecutableDocument): number {
     if (typeof order === "number" && order > highest) highest = order
   }
   return highest + 1
+}
+
+// ============================================================================
+// Melody and Chord Note Generation (issue #29)
+// ============================================================================
+
+type NotePositionWithPitch = { pitch: number; positionTicks: number; durationTicks: number }
+
+/**
+ * Generate note positions for a melody.
+ *
+ * Creates a sequence of notes using pitches from the scale, following
+ * the specified melodic pattern (ascending, descending, wave, random).
+ */
+function melodyPositions(
+  action: Extract<PlanAction, { type: "create_melody_notes" }>,
+  durationTicks: number,
+  ticksPerBar: number,
+): NotePositionWithPitch[] {
+  const positions: NotePositionWithPitch[] = []
+  const { pitches, pattern, noteDuration } = action
+
+  if (pitches.length === 0) return positions
+
+  const noteDurationTicks: Record<NoteDuration, number> = {
+    eighth: ticksPerBar / 8,
+    quarter: ticksPerBar / 4,
+    half: ticksPerBar / 2,
+  }
+  const durationTicksPerNote = noteDurationTicks[noteDuration]
+
+  const bars = Math.max(1, Math.round(durationTicks / ticksPerBar))
+  const notesPerBar = Math.round(ticksPerBar / durationTicksPerNote)
+  let pitchIndex = 0
+  let direction = 1 // For wave pattern: 1 = up, -1 = down
+
+  for (let bar = 0; bar < bars; bar++) {
+    for (let i = 0; i < notesPerBar; i++) {
+      const positionTicks = bar * ticksPerBar + i * durationTicksPerNote
+
+      // Select pitch based on pattern
+      let pitch: number
+      switch (pattern) {
+        case "ascending":
+          pitch = pitches[pitchIndex % pitches.length]!
+          pitchIndex++
+          break
+
+        case "descending":
+          pitch = pitches[(pitches.length - 1 - (pitchIndex % pitches.length)) % pitches.length]!
+          pitchIndex++
+          break
+
+        case "wave":
+          // Go up then down through the scale
+          pitch = pitches[pitchIndex]!
+          pitchIndex += direction
+          if (pitchIndex >= pitches.length - 1) {
+            direction = -1
+            pitchIndex = pitches.length - 1
+          } else if (pitchIndex <= 0) {
+            direction = 1
+            pitchIndex = 0
+          }
+          break
+
+        case "random":
+        default:
+          pitch = pitches[Math.floor(Math.random() * pitches.length)]!
+          break
+      }
+
+      positions.push({ pitch, positionTicks, durationTicks: durationTicksPerNote })
+    }
+  }
+
+  return positions
+}
+
+/**
+ * Generate note positions for a chord progression.
+ *
+ * Creates notes for each chord, with voicing determining how the chord
+ * notes are timed relative to each other.
+ */
+function chordPositions(
+  action: Extract<PlanAction, { type: "create_chord_notes" }>,
+  durationTicks: number,
+  ticksPerBar: number,
+): NotePositionWithPitch[] {
+  const positions: NotePositionWithPitch[] = []
+  const { chords, voicing, chordsPerBar } = action
+
+  if (chords.length === 0) return positions
+
+  const bars = Math.max(1, Math.round(durationTicks / ticksPerBar))
+  const ticksPerChord = ticksPerBar / chordsPerBar
+  let chordIndex = 0
+
+  for (let bar = 0; bar < bars; bar++) {
+    for (let c = 0; c < chordsPerBar; c++) {
+      const chord = chords[chordIndex % chords.length]!
+      const chordStartTicks = bar * ticksPerBar + c * ticksPerChord
+
+      switch (voicing) {
+        case "block":
+          // All notes start at the same time, full duration
+          for (const pitch of chord) {
+            positions.push({
+              pitch,
+              positionTicks: chordStartTicks,
+              durationTicks: ticksPerChord,
+            })
+          }
+          break
+
+        case "arpeggiated":
+          // Notes stagger through the duration
+          const arpDuration = ticksPerChord / chord.length
+          chord.forEach((pitch, i) => {
+            positions.push({
+              pitch,
+              positionTicks: chordStartTicks + i * arpDuration,
+              durationTicks: arpDuration,
+            })
+          })
+          break
+
+        case "broken":
+          // Root-fifth-third pattern (more musical arpeggio)
+          const brokenOrder = chord.length >= 3 ? [0, 2, 1, 2] : [0, 1, 0, 1]
+          const brokenDuration = ticksPerChord / brokenOrder.length
+          brokenOrder.forEach((noteIndex, i) => {
+            if (noteIndex < chord.length) {
+              positions.push({
+                pitch: chord[noteIndex]!,
+                positionTicks: chordStartTicks + i * brokenDuration,
+                durationTicks: brokenDuration,
+              })
+            }
+          })
+          break
+      }
+
+      chordIndex++
+    }
+  }
+
+  return positions
 }

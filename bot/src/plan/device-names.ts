@@ -21,14 +21,32 @@ export interface ResolvedDevice {
  * "808" is the important one: producers say 808, the SDK has `bassline`.
  */
 const ALIASES: Readonly<Record<string, string>> = {
+  // Bass
   "808": "bassline",
   "sub bass": "bassline",
   subbass: "bassline",
   "acid bass": "bassline",
+  // Drums
   "drum machine": "beatbox9",
   drums: "beatbox9",
+  // Synths
   sampler: "machiniste",
   synth: "heisenberg",
+  // Lead/melody aliases
+  lead: "heisenberg",
+  "lead synth": "heisenberg",
+  "synth lead": "heisenberg",
+  "melody synth": "heisenberg",
+  // Pad/chord aliases
+  pad: "space",
+  pads: "space",
+  strings: "space",
+  ambient: "pulverisateur",
+  texture: "pulverisateur",
+  // Keys
+  keys: "tonematrix",
+  piano: "gakki",
+  keyboard: "tonematrix",
 }
 
 /** Display spellings for entity keys whose casing is not obvious. */
