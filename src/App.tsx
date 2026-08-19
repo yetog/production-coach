@@ -10,6 +10,7 @@ import { CommandCenter } from '@/components/CommandCenter'
 import { useNexus } from '@/hooks/useNexus'
 import { useCoach } from '@/hooks/useCoach'
 import { useVoice } from '@/hooks/useVoice'
+import { usePushToTalk } from '@/hooks/usePushToTalk'
 import type { ChatMessage, CoachAction, CoachSettings } from '@/types'
 
 // Dr. Zay avatar for chat bubbles
@@ -51,6 +52,15 @@ function App() {
   } = useVoice({
     onTranscript: (text) => sendMessage(text),
     onSpeakingChange: () => {},
+  })
+
+  // Push-to-talk: Hold Y to record (issues #54, #55)
+  usePushToTalk({
+    key: 'y',
+    onStart: startListening,
+    onStop: stopListening,
+    onStopSpeaking: stopSpeaking,
+    enabled: sttSupported && settings.voiceEnabled,
   })
 
   const [input, setInput] = useState('')
@@ -279,20 +289,33 @@ function App() {
           {/* Input area */}
           <form onSubmit={handleSubmit} className="safe-area-inset-bottom">
             <div className="flex gap-2 items-center p-2 rounded-2xl bg-card/80 backdrop-blur-sm border border-border/50">
-              {/* Mic button */}
+              {/* Mic button with push-to-talk hint */}
               {sttSupported && (
-                <button
-                  type="button"
-                  onClick={handleToggleListening}
-                  className={cn(
-                    'p-3 rounded-xl flex-shrink-0 transition-all',
-                    isListening
-                      ? 'bg-red-500 text-white animate-pulse'
-                      : 'bg-secondary/50 text-muted-foreground hover:text-foreground'
+                <div className="relative flex-shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleToggleListening}
+                    className={cn(
+                      'p-3 rounded-xl transition-all',
+                      isListening
+                        ? 'bg-red-500 text-white animate-pulse'
+                        : 'bg-secondary/50 text-muted-foreground hover:text-foreground'
+                    )}
+                    title={settings.voiceEnabled ? 'Hold Y to talk' : 'Enable voice in settings'}
+                  >
+                    {isListening ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
+                  </button>
+                  {/* Push-to-talk key hint */}
+                  {settings.voiceEnabled && !isListening && (
+                    <span className="absolute -top-1 -right-1 w-4 h-4 text-[10px] font-bold bg-cyan-500 text-white rounded flex items-center justify-center">
+                      Y
+                    </span>
                   )}
-                >
-                  {isListening ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
-                </button>
+                  {/* Recording indicator */}
+                  {isListening && (
+                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full animate-ping" />
+                  )}
+                </div>
               )}
 
               <input

@@ -14,7 +14,7 @@
 | Melodies | ✅ Working | `add melody in C major at bar 1` |
 | Chords | ✅ Working | `add jazzy chords in Am` |
 | Add Device | ✅ Working | `add a heisenberg` (generic) |
-| Voice Input | ⚠️ Partial | ElevenLabs integrated, no push-to-talk |
+| Voice Input | ✅ Working | Hold Y to talk (push-to-talk) |
 | Voice Output | ✅ Working | ElevenLabs TTS |
 
 ## Missing for Full Song Creation
@@ -23,10 +23,10 @@
 |---------|--------|----------|-------|
 | **Drums/Beats** | ✅ Working | - | Implemented |
 | **Arrangement** | ✅ Partial | MEDIUM | Duration/range syntax added |
+| **Push-to-talk** | ✅ Working | - | #54, #55 - Hold Y to talk |
 | **FX/Effects** | ❌ Missing | MEDIUM | #28 |
 | **Automation** | ❌ Missing | MEDIUM | #28 |
 | **Mix Moves** | ❌ Missing | LOW | #28 |
-| **Push-to-talk** | ❌ Missing | HIGH | #54, #55 |
 | **Genre Buttons** | ❌ Missing | LOW | #53 |
 
 ## Can a User Make a Full Song?
@@ -47,7 +47,6 @@ A user CANNOT yet:
 1. Copy/duplicate existing content
 2. Add effects (reverb, delay, compression)
 3. Create automation (filter sweeps, risers)
-4. Do hands-free voice commands (push-to-talk)
 
 ## Arrangement Features (NEW)
 
@@ -82,9 +81,9 @@ add melody from bar 1 to bar 16
 5. **Arrangement** - section markers, copy/move regions
 
 ### Priority Implementation Order
-1. `add drums` command (beatbox9 with preset patterns)
-2. `add intro/verse/chorus` arrangement commands
-3. Push-to-talk for hands-free workflow
+1. ~~`add drums` command (beatbox9 with preset patterns)~~ ✅ Done
+2. ~~Push-to-talk for hands-free workflow~~ ✅ Done (Hold Y)
+3. `add intro/verse/chorus` arrangement commands
 4. FX commands (nice to have)
 
 ## Technical Notes
@@ -108,9 +107,10 @@ From the Producer Action Library issue:
 
 | Action | Status |
 |--------|--------|
-| Add drums to track | ❌ Not implemented |
+| Add drums to track | ✅ Implemented (trap, house, hip-hop, etc.) |
 | Add 808/bass to drop | ✅ Implemented |
 | Add chord progression | ✅ Implemented |
+| Add melody | ✅ Implemented |
 | Create/extend intro | ❌ Not implemented |
 | Add riser/filter automation | ❌ Not implemented |
 | Add reverb/delay effect | ❌ Not implemented |
@@ -120,8 +120,9 @@ From the Producer Action Library issue:
 
 ## Recommendations
 
-1. **Next sprint focus:** Drums + Arrangement
-2. **UX focus:** Push-to-talk (#54, #55)
-3. **Polish:** Genre-aware suggestions (#53)
+1. ~~**Next sprint focus:** Drums + Arrangement~~ ✅ Drums done, arrangement partial
+2. ~~**UX focus:** Push-to-talk (#54, #55)~~ ✅ Hold Y to talk
+3. **Next:** Copy/duplicate regions, FX commands
+4. **Polish:** Genre-aware suggestions (#53)
 
-With drums and basic arrangement, users could create a simple but complete track structure.
+With drums, melodies, chords, and push-to-talk, users can now create complete tracks using voice commands.
