@@ -19,6 +19,8 @@ export type PlanIntent =
   | "add_melody"
   | "add_chords"
   | "add_drums"
+  | "extend_content"
+  | "copy_content"
   | "preview_only"
   | "unknown"
 
@@ -65,6 +67,26 @@ export type PlanAction =
       /** Pattern name for display */
       patternName: string
     }
+  | {
+      type: "extend_region"
+      /** Additional bars to add */
+      additionalBars: number
+      /** Content type being extended */
+      contentType: ContentType
+    }
+  | {
+      type: "copy_region"
+      /** What kind of content to copy */
+      contentType: ContentType
+      /** Source bars to copy from */
+      sourceStartBar: number
+      sourceEndBar: number
+      /** Target bar to copy to */
+      targetStartBar: number
+    }
+
+/** Types of musical content that can be copied or extended */
+export type ContentType = "drums" | "808" | "melody" | "chords"
 
 export type ToneHint = "dark" | "bright" | "neutral"
 export type NotePattern = "downbeats" | "eighths" | "sustained"

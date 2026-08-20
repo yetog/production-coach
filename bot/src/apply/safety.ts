@@ -81,6 +81,10 @@ function describeAction(action: PlanAction): string {
       return `place ${action.chords.length} chords with ${action.voicing} voicing, ${action.chordsPerBar} per bar (velocity ${action.velocity})`
     case "create_drum_notes":
       return `place a ${action.patternName} drum pattern with ${action.hits.length} hits per bar`
+    case "extend_region":
+      return `extend the ${action.contentType} by ${action.additionalBars} more bars`
+    case "copy_region":
+      return `copy ${action.contentType} from bars ${action.sourceStartBar}-${action.sourceEndBar} to bar ${action.targetStartBar}`
   }
 }
 

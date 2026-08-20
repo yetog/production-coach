@@ -14,6 +14,7 @@ import { CONFIDENCE_THRESHOLD } from "../analyze/sections.js"
 import { resolveDeviceName } from "./device-names.js"
 import type {
   ChordVoicing,
+  ContentType,
   MelodicPattern,
   NotePattern,
   NoteDuration,
@@ -67,6 +68,14 @@ const DEFAULT_KEY: KeySignature = {
 
 export function planCommand(command: string, session: SessionReport): Plan {
   const text = command.toLowerCase().trim()
+
+  // Check for copy/extend commands first
+  if (mentionsCopy(text)) {
+    return buildCopyPlan(command, text, session)
+  }
+  if (mentionsExtend(text)) {
+    return buildExtendPlan(command, text, session)
+  }
 
   // Check for melody commands first (before 808 check, since "add melody" != 808)
   if (mentionsMelody(text)) {
@@ -865,3 +874,363 @@ function buildDrumPlan(command: string, text: string, session: SessionReport): P
     requiresConfirmation: false,
   }
 }
+
+// ============================================================================
+// Copy/Extend Support
+// ============================================================================
+
+function mentionsCopy(text: string): boolean {
+  return /\b(copy|duplicate|repeat|clone)\b/.test(text) && !mentionsExtend(text)
+}
+
+function mentionsExtend(text: string): boolean {
+  return /\b(extend|lengthen|continue|more\s+bars)\b/.test(text)
+}
+
+/**
+ * Extract the content type being referenced (drums, 808, melody, chords).
+ */
+function extractContentType(text: string): ContentType | undefined {
+  if (/\b(drums?|beat|rhythm|percussion)\b/.test(text)) return "drums"
+  if (/\b(808|bass(?:line)?|sub)\b/.test(text)) return "808"
+  if (/\b(melody|lead|riff|hook)\b/.test(text)) return "melody"
+  if (/\b(chords?|harmony|progression|pads?)\b/.test(text)) return "chords"
+  return undefined
+}
+
+/**
+ * Extract "to bar N" or "at bar N" target from command.
+ */
+function extractCopyTarget(text: string): number | undefined {
+  const match = /(?:to|at)\s+bar\s+(\d{1,4})\b/.exec(text)
+  if (match !== null) {
+    const bar = Number(match[1])
+    return Number.isInteger(bar) && bar >= 1 ? bar : undefined
+  }
+  return undefined
+}
+
+/**
+ * Extract "for N bars" or "N more bars" from extend command.
+ */
+function extractExtendBars(text: string): number | undefined {
+  const match = /(?:for\s+)?(\d{1,3})\s*(?:more\s+)?bars?\b/.exec(text)
+  if (match !== null) {
+    const bars = Number(match[1])
+    return Number.isInteger(bars) && bars >= 1 ? bars : undefined
+  }
+  return undefined
+}
+
+/**
+ * Build a copy plan - duplicate content to a new location.
+ */
+function buildCopyPlan(command: string, text: string, session: SessionReport): Plan {
+  const contentType = extractContentType(text)
+  const targetBar = extractCopyTarget(text)
+
+  // Need to know what content type to copy
+  if (contentType === undefined) {
+    return {
+      planId: "clarify_copy",
+      command,
+      intent: "copy_content",
+      interpretedIntent: "Copy content, but the content type is not clear",
+      target: { startBar: 0, endBar: 0, confidence: 0 },
+      actions: [],
+      summary: "What would you like to copy? (e.g., drums, 808, melody, chords)",
+      safety: "creates_only",
+      verification: [],
+      requiresConfirmation: true,
+      clarification: "What would you like to copy? (drums, 808, melody, or chords)",
+    }
+  }
+
+  // Need to know where to copy to
+  if (targetBar === undefined) {
+    return {
+      planId: `clarify_copy_${contentType}`,
+      command,
+      intent: "copy_content",
+      interpretedIntent: `Copy the ${contentType}, but the target bar is not specified`,
+      target: { startBar: 0, endBar: 0, confidence: 0 },
+      actions: [],
+      summary: `Which bar should I copy the ${contentType} to?`,
+      safety: "creates_only",
+      verification: [],
+      requiresConfirmation: true,
+      clarification: `Which bar should I copy the ${contentType} to? (e.g., "to bar 33")`,
+    }
+  }
+
+  // Get the source section - look for existing content of that type
+  const source = resolveSourceSection(text, session, contentType)
+  if (source.requiresConfirmation) {
+    return {
+      planId: `clarify_copy_source_${contentType}`,
+      command,
+      intent: "copy_content",
+      interpretedIntent: `Copy the ${contentType} to bar ${targetBar}, but the source is unclear`,
+      target: { startBar: targetBar, endBar: targetBar + 15, confidence: 0 },
+      actions: [],
+      summary: source.clarification!,
+      safety: "creates_only",
+      verification: [],
+      requiresConfirmation: true,
+      clarification: source.clarification,
+    }
+  }
+
+  const durationBars = source.endBar - source.startBar + 1
+  const target: PlanTarget = {
+    startBar: targetBar,
+    endBar: targetBar + durationBars - 1,
+    confidence: 1,
+  }
+
+  // Build appropriate actions based on content type
+  const actions = buildCopyActions(contentType, target, text)
+
+  return {
+    planId: planId("copy_content", target),
+    command,
+    intent: "copy_content",
+    interpretedIntent: `Copy the ${contentType} from bars ${source.startBar}-${source.endBar} to bar ${targetBar}`,
+    target,
+    actions,
+    summary:
+      `I will create new ${contentType} content at bar ${targetBar}, matching the style from ` +
+      `bars ${source.startBar}-${source.endBar}. This creates new content (not linked to the original).`,
+    safety: "creates_only",
+    verification: [
+      { kind: "entities_exist", description: "device, track, region, and notes" },
+      { kind: "entity_count", entityType: "note", atLeast: 1 },
+      { kind: "routed_to_mixer", description: "the device reaches a mixer channel" },
+    ],
+    requiresConfirmation: false,
+  }
+}
+
+/**
+ * Build an extend plan - add more bars to existing content.
+ */
+function buildExtendPlan(command: string, text: string, session: SessionReport): Plan {
+  const contentType = extractContentType(text)
+  const additionalBars = extractExtendBars(text)
+
+  // Need to know what content type to extend
+  if (contentType === undefined) {
+    return {
+      planId: "clarify_extend",
+      command,
+      intent: "extend_content",
+      interpretedIntent: "Extend content, but the content type is not clear",
+      target: { startBar: 0, endBar: 0, confidence: 0 },
+      actions: [],
+      summary: "What would you like to extend? (e.g., drums, 808, melody, chords)",
+      safety: "creates_only",
+      verification: [],
+      requiresConfirmation: true,
+      clarification: "What would you like to extend? (drums, 808, melody, or chords)",
+    }
+  }
+
+  // Need to know how many bars to add
+  if (additionalBars === undefined) {
+    return {
+      planId: `clarify_extend_${contentType}`,
+      command,
+      intent: "extend_content",
+      interpretedIntent: `Extend the ${contentType}, but the number of bars is not specified`,
+      target: { startBar: 0, endBar: 0, confidence: 0 },
+      actions: [],
+      summary: `How many bars should I extend the ${contentType} by?`,
+      safety: "creates_only",
+      verification: [],
+      requiresConfirmation: true,
+      clarification: `How many bars should I extend the ${contentType} by? (e.g., "for 16 bars")`,
+    }
+  }
+
+  // Get the source section to know where the extension should start
+  const source = resolveSourceSection(text, session, contentType)
+  if (source.requiresConfirmation) {
+    return {
+      planId: `clarify_extend_source_${contentType}`,
+      command,
+      intent: "extend_content",
+      interpretedIntent: `Extend the ${contentType} by ${additionalBars} bars, but the source is unclear`,
+      target: { startBar: 0, endBar: 0, confidence: 0 },
+      actions: [],
+      summary: source.clarification!,
+      safety: "creates_only",
+      verification: [],
+      requiresConfirmation: true,
+      clarification: source.clarification,
+    }
+  }
+
+  // Extension starts right after the source ends
+  const target: PlanTarget = {
+    startBar: source.endBar + 1,
+    endBar: source.endBar + additionalBars,
+    confidence: 1,
+  }
+
+  // Build appropriate actions based on content type
+  const actions = buildCopyActions(contentType, target, text)
+
+  return {
+    planId: planId("extend_content", target),
+    command,
+    intent: "extend_content",
+    interpretedIntent: `Extend the ${contentType} by ${additionalBars} bars starting at bar ${target.startBar}`,
+    target,
+    actions,
+    summary:
+      `I will extend the ${contentType} by adding ${additionalBars} more bars starting at bar ${target.startBar}. ` +
+      `This creates new content continuing from bar ${source.endBar}.`,
+    safety: "creates_only",
+    verification: [
+      { kind: "entities_exist", description: "device, track, region, and notes" },
+      { kind: "entity_count", entityType: "note", atLeast: 1 },
+      { kind: "routed_to_mixer", description: "the device reaches a mixer channel" },
+    ],
+    requiresConfirmation: false,
+  }
+}
+
+/**
+ * Resolve the source section for copy/extend operations.
+ */
+interface ResolvedSource extends PlanTarget {
+  requiresConfirmation?: boolean
+  clarification?: string
+}
+
+function resolveSourceSection(
+  text: string,
+  session: SessionReport,
+  contentType: ContentType,
+): ResolvedSource {
+  // Check for explicit "from bars X-Y" or "from bar X"
+  const barRange = parseBarRange(text)
+  if (barRange !== undefined) {
+    return {
+      startBar: barRange.startBar,
+      endBar: barRange.endBar,
+      confidence: 1,
+    }
+  }
+
+  const explicitBar = explicitBarFrom(text)
+  if (explicitBar !== undefined) {
+    return {
+      startBar: explicitBar,
+      endBar: explicitBar + DEFAULT_BARS - 1,
+      confidence: 1,
+    }
+  }
+
+  // Check for section names like "the drop", "the verse"
+  const sectionName = extractSectionName(text)
+  if (sectionName !== undefined) {
+    const section = session.sections.find((s) => s.label === sectionName)
+    if (section !== undefined) {
+      return {
+        section: section.label,
+        startBar: section.startBar,
+        endBar: section.endBar,
+        confidence: section.confidence,
+      }
+    }
+  }
+
+  // Try to find existing content of the specified type
+  // For now, use the drop as the default source
+  const drop = session.drop
+  if (drop !== undefined && drop.confidence >= CONFIDENCE_THRESHOLD) {
+    return {
+      section: drop.label,
+      startBar: drop.startBar,
+      endBar: drop.endBar,
+      confidence: drop.confidence,
+    }
+  }
+
+  // No clear source - ask for clarification
+  return {
+    startBar: 0,
+    endBar: 0,
+    confidence: 0,
+    requiresConfirmation: true,
+    clarification: `I couldn't identify which ${contentType} to copy. Which bars contain the ${contentType}? (e.g., "from bars 1-16")`,
+  }
+}
+
+/**
+ * Build actions for copy/extend based on content type.
+ */
+function buildCopyActions(contentType: ContentType, target: PlanTarget, text: string): PlanAction[] {
+  const durationBars = Math.max(1, target.endBar - target.startBar + 1)
+
+  switch (contentType) {
+    case "drums": {
+      const pattern = extractDrumPattern(text) ?? getPattern("basic")!
+      const hits = pattern.hits.map((hit) => ({
+        pitch: DRUM_NOTES[hit.piece],
+        position: hit.position,
+        velocity: hit.velocity,
+      }))
+      return [
+        { type: "create_source", deviceType: "beatbox9", displayName: `Agent ${pattern.name} (Copy)` },
+        { type: "route_to_mixer", deviceType: "beatbox9" },
+        { type: "create_note_track", displayName: `Agent ${pattern.name} (Copy)` },
+        { type: "create_note_region", startBar: target.startBar, durationBars },
+        { type: "create_drum_notes", hits, patternName: pattern.name },
+      ]
+    }
+    case "808": {
+      const tone = toneFrom(text)
+      const pattern: NotePattern = tone === "dark" ? "sustained" : "downbeats"
+      return [
+        { type: "create_source", deviceType: "bassline", displayName: "Agent 808 (Copy)", tone },
+        { type: "route_to_mixer", deviceType: "bassline" },
+        { type: "create_note_track", displayName: "Agent 808 (Copy)" },
+        { type: "create_note_region", startBar: target.startBar, durationBars },
+        { type: "create_notes", pitch: PITCH_808, pattern, velocity: tone === "dark" ? 0.9 : 0.75 },
+      ]
+    }
+    case "melody": {
+      const key = extractKey(text) ?? DEFAULT_KEY
+      const tone = toneFrom(text)
+      const pattern = extractMelodicPattern(text)
+      const pitches = getScaleNotes(key.rootPitch, key.scale, 2)
+      const deviceType = tone === "dark" ? "pulverisateur" : "heisenberg"
+      return [
+        { type: "create_source", deviceType, displayName: "Agent Lead (Copy)", tone },
+        { type: "route_to_mixer", deviceType },
+        { type: "create_note_track", displayName: "Agent Lead (Copy)" },
+        { type: "create_note_region", startBar: target.startBar, durationBars },
+        { type: "create_melody_notes", pitches, pattern, velocity: 0.75, noteDuration: "eighth" },
+      ]
+    }
+    case "chords": {
+      const key = extractKey(text) ?? DEFAULT_KEY
+      const tone = toneFrom(text)
+      const voicing = extractVoicing(text)
+      const progressionName = extractProgression(text)
+      const progressionDegrees = PROGRESSIONS[progressionName]
+      const chords = buildChordProgression(CHORD_OCTAVE, key.scale, key.mode, progressionDegrees)
+      const deviceType = tone === "bright" ? "heisenberg" : "space"
+      return [
+        { type: "create_source", deviceType, displayName: "Agent Chords (Copy)", tone },
+        { type: "route_to_mixer", deviceType },
+        { type: "create_note_track", displayName: "Agent Chords (Copy)" },
+        { type: "create_note_region", startBar: target.startBar, durationBars },
+        { type: "create_chord_notes", chords, voicing, velocity: 0.7, chordsPerBar: 1 },
+      ]
+    }
+  }
+}
+
