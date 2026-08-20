@@ -19,7 +19,7 @@ function App() {
   // The whole agent surface, not just session/addDevice: CommandCenter needs
   // plan/apply/undo to drive real DAW edits (#24).
   const agent = useNexus()
-  const { session, addDevice } = agent
+  const { session, addDevice, applyCommand } = agent
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [settings, setSettings] = useState<CoachSettings>({
     chattiness: 50,
@@ -40,7 +40,12 @@ function App() {
     toggleChecklistItem,
     clearConversation,
     stopSpeaking,
-  } = useCoach({ session, onAddDevice: addDevice, voiceEnabled: settings.voiceEnabled })
+  } = useCoach({
+    session,
+    onAddDevice: addDevice,
+    onApplyCommand: applyCommand,
+    voiceEnabled: settings.voiceEnabled,
+  })
 
   // STT with Web Speech API
   const {

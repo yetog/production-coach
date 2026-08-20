@@ -137,6 +137,65 @@ describe("parseActionFromResponse - real replies from the live model", () => {
   })
 })
 
+describe("parseActionFromResponse - 808 / musical-move suggestions (issue #53)", () => {
+  it("suggests an 808 move, not a device, when the coach proposes one under the drop", () => {
+    const action = parseActionFromResponse("Try adding a dark 808 under the drop for that trap weight.")
+
+    expect(action).not.toBeNull()
+    expect(action.type).toBe("create_notes")
+    expect(action.params.command).toMatch(/808/i)
+    expect(action.params.command).toMatch(/drop/i)
+    // Tone the coach named is carried into the command the planner will run.
+    expect(action.params.command).toMatch(/dark/i)
+  })
+
+  it("carries an explicit bar into the command using the planner's 'bar N' syntax", () => {
+    const action = parseActionFromResponse("Put an 808 at bar 33 to anchor the low end.")
+
+    expect(action.type).toBe("create_notes")
+    expect(action.params.command).toMatch(/\bbar 33\b/)
+  })
+
+  it("recognises sub bass phrasing as an 808 move", () => {
+    const action = parseActionFromResponse("Throw a sub bass under the drop here.")
+
+    expect(action?.type).toBe("create_notes")
+    expect(action?.params.command).toMatch(/808|sub/i)
+  })
+
+  it("never offers an 808 the coach advised against", () => {
+    for (const text of [
+      "Don't add an 808 here, your low end is already muddy.",
+      "No need to put an 808 under the drop, the bassline covers it.",
+      "Rather than adding an 808, tighten the kick.",
+    ]) {
+      expect(parseActionFromResponse(text), text).toBeNull()
+    }
+  })
+
+  it("does not fire on an 808 mentioned without a call to action", () => {
+    expect(parseActionFromResponse("Your 808 is sitting nicely in the drop already.")).toBeNull()
+    expect(parseActionFromResponse("That 808 is way too loud in the mix.")).toBeNull()
+  })
+
+  it("still treats a bare device recommendation as add_device, not an 808 move", () => {
+    const action = parseActionFromResponse("Grab a Bassline for the low end.")
+
+    expect(action.type).toBe("add_device")
+    expect(action.params.deviceType).toBe("bassline")
+  })
+
+  it("still picks the device the coach led with when an 808 is named later", () => {
+    // Unchanged behaviour from #40: the device in the first clause wins.
+    const action = parseActionFromResponse(
+      "Start with a Beatbox 9 for harder hats, a Bassline for the 808, and maybe a Machiniste layer.",
+    )
+
+    expect(action?.type).toBe("add_device")
+    expect(action?.params.deviceType).toBe("beatbox9")
+  })
+})
+
 describe("parseActionFromResponse - robustness", () => {
   it("does not throw on empty, missing or non-string input", () => {
     for (const input of ["", null, undefined, 42, {}]) {
