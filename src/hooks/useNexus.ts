@@ -170,6 +170,27 @@ export function useNexus() {
     [applyPlan, planCommand],
   )
 
+  /**
+   * Apply a producer command the coach proposed (issue #53).
+   *
+   * Same safety envelope as addDevice: plan from a live read, refuse anything
+   * still needing confirmation, then apply. Used for 808 / musical moves whose
+   * command the chat already built.
+   */
+  const applyCommand = useCallback(
+    async (command: string) => {
+      const plan = await planCommand(command)
+      if (plan === null) return null
+      if (plan.requiresConfirmation) {
+        setError(plan.clarification ?? plan.summary)
+        return null
+      }
+      const outcome = await applyPlan(command, plan.planId)
+      return outcome === null ? null : { plan, outcome }
+    },
+    [applyPlan, planCommand],
+  )
+
   return {
     session,
     sections,
@@ -180,5 +201,6 @@ export function useNexus() {
     applyPlan,
     undoLast,
     addDevice,
+    applyCommand,
   }
 }

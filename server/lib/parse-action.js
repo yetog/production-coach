@@ -68,8 +68,42 @@ function toClauses(text) {
 }
 
 /**
+ * An 808 / sub-bass move is a musical suggestion, not a device add: it places
+ * notes on the timeline, so it routes through the producer command pipeline
+ * (planner -> executor) rather than add_device. We surface it as a ready-to-run
+ * command string the planner already understands (issue #53).
+ */
+const SUB_808 = /\b808\b|\bsub\s*bass\b/i
+
+/** Tone words the planner reads back out of the command via its own toneFrom(). */
+const TONE_DARK = /\b(dark|deep|heavy|moody|sub)\b/i
+const TONE_BRIGHT = /\b(bright|light|clean|punchy)\b/i
+
+/** "at bar 33", "bar 33" - mirrors the planner's own explicit-bar parsing. */
+const EXPLICIT_BAR = /\bbar\s+(\d{1,4})\b/i
+
+/**
+ * Build a producer command the planner accepts from a coach clause proposing an
+ * 808. Tone and an explicit bar are preserved; otherwise it targets the drop,
+ * which is the planner's default for an 808 with no named bar.
+ */
+function build808Command(clause) {
+  const tone = TONE_DARK.test(clause) ? "dark " : TONE_BRIGHT.test(clause) ? "bright " : ""
+  const bar = EXPLICIT_BAR.exec(clause)
+  const where = bar === null ? "under the drop" : `at bar ${bar[1]}`
+  const command = `add a ${tone}808 ${where}`
+  const label = `Add ${tone === "" ? "an" : `a ${tone.trim()}`} 808`
+  return {
+    type: "create_notes",
+    label,
+    description: `${label} ${where}`,
+    params: { command },
+  }
+}
+
+/**
  * @returns {{type: string, label: string, description: string,
- *   params: {deviceType: string, displayName: string}} | null}
+ *   params: Record<string, unknown>} | null}
  */
 export function parseActionFromResponse(content) {
   if (typeof content !== "string" || content.trim() === "") return null
@@ -77,6 +111,10 @@ export function parseActionFromResponse(content) {
   for (const clause of toClauses(content)) {
     if (NEGATION.test(clause)) continue
     if (!ACTION_VERB.test(clause)) continue
+
+    // An 808/sub-bass move takes precedence over a device add in the same
+    // clause: it is the more specific, musical intent.
+    if (SUB_808.test(clause)) return build808Command(clause)
 
     // First match in document order, so "add a Beatbox 8, then a Heisenberg"
     // suggests the one the coach led with.

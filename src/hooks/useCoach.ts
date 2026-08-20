@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import type { ChatMessage, CoachAction, ChecklistItem, CoachState, SessionState } from '@/types'
 import { DEFAULT_CHECKLIST } from '@/types'
+import { resolveActionRoute } from '@/lib/coach-action'
 import { useApi } from './useApi'
 
 // Storage keys
@@ -42,10 +43,12 @@ function saveToStorage<T>(key: string, value: T): void {
 interface UseCoachOptions {
   session: SessionState
   onAddDevice?: (type: string, displayName?: string) => Promise<unknown>
+  /** Apply a producer command the coach proposed (issue #53) — 808 / musical moves. */
+  onApplyCommand?: (command: string) => Promise<unknown>
   voiceEnabled?: boolean
 }
 
-export function useCoach({ session, onAddDevice, voiceEnabled = false }: UseCoachOptions) {
+export function useCoach({ session, onAddDevice, onApplyCommand, voiceEnabled = false }: UseCoachOptions) {
   const { sendChat, speak, isSpeaking, stopSpeaking, isLoading: apiLoading } = useApi()
 
   // Initialize state from localStorage
@@ -200,35 +203,42 @@ export function useCoach({ session, onAddDevice, voiceEnabled = false }: UseCoac
     }
   }, [messages, goal, session, sendChat, speak, voiceEnabled, isSpeaking])
 
-  // Apply an action
+  // Apply an action — either a device add (#40) or an 808/musical move (#53).
   const applyAction = useCallback(async (action: CoachAction) => {
-    if (action.type === 'add_device' && action.params) {
-      const { deviceType, displayName } = action.params as { deviceType: string; displayName?: string }
-      await onAddDevice?.(deviceType, displayName)
+    const route = resolveActionRoute(action)
+    if (route.kind === 'none') return
 
-      // Mark action as applied
-      setMessages(prev =>
-        prev.map(msg =>
-          msg.action?.label === action.label
-            ? { ...msg, action: { ...msg.action!, applied: true } }
-            : msg
-        )
-      )
-
-      // Add confirmation
-      const confirmation: ChatMessage = {
-        id: `confirm-${Date.now()}`,
-        role: 'coach',
-        content: `Done! ${displayName || deviceType} is now in your session. What's next?`,
-        timestamp: new Date(),
-      }
-      setMessages(prev => [...prev, confirmation])
-
-      if (voiceEnabled) {
-        speak(confirmation.content)
-      }
+    let what: string
+    if (route.kind === 'command') {
+      await onApplyCommand?.(route.command)
+      what = 'that move'
+    } else {
+      await onAddDevice?.(route.deviceType, route.displayName)
+      what = route.displayName || route.deviceType
     }
-  }, [onAddDevice, voiceEnabled, speak])
+
+    // Mark action as applied
+    setMessages(prev =>
+      prev.map(msg =>
+        msg.action?.label === action.label
+          ? { ...msg, action: { ...msg.action!, applied: true } }
+          : msg
+      )
+    )
+
+    // Add confirmation
+    const confirmation: ChatMessage = {
+      id: `confirm-${Date.now()}`,
+      role: 'coach',
+      content: `Done! ${what} is now in your session. What's next?`,
+      timestamp: new Date(),
+    }
+    setMessages(prev => [...prev, confirmation])
+
+    if (voiceEnabled) {
+      speak(confirmation.content)
+    }
+  }, [onAddDevice, onApplyCommand, voiceEnabled, speak])
 
   // Update checklist item
   const toggleChecklistItem = useCallback((itemId: number) => {
