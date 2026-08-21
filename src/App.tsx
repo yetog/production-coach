@@ -11,6 +11,7 @@ import { useNexus } from '@/hooks/useNexus'
 import { useCoach } from '@/hooks/useCoach'
 import { useVoice } from '@/hooks/useVoice'
 import { usePushToTalk } from '@/hooks/usePushToTalk'
+import { useExtensionPtt } from '@/hooks/useExtensionPtt'
 import type { ChatMessage, CoachAction, CoachSettings } from '@/types'
 
 // Dr. Zay avatar for chat bubbles
@@ -59,11 +60,21 @@ function App() {
     onSpeakingChange: () => {},
   })
 
-  // Push-to-talk: Hold Y to record (issues #54, #55)
+  // Push-to-talk: Hold Y to record while the window is focused (issue #54).
   usePushToTalk({
     key: 'y',
     onStart: startListening,
     onStop: stopListening,
+    onStopSpeaking: stopSpeaking,
+    enabled: sttSupported && settings.voiceEnabled,
+  })
+
+  // Global push-to-talk via the companion extension: Ctrl+Shift+Y toggles the
+  // mic even while the DAW has focus (issue #55). Inert without the extension.
+  useExtensionPtt({
+    isListening,
+    start: startListening,
+    stop: stopListening,
     onStopSpeaking: stopSpeaking,
     enabled: sttSupported && settings.voiceEnabled,
   })
