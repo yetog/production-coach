@@ -1,10 +1,15 @@
-import { Music, Drum, Piano, Radio, Wifi, WifiOff } from 'lucide-react'
+import { useState } from 'react'
+import { Music, Drum, Piano, Radio, Wifi, WifiOff, Link, RefreshCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { SessionState, DeviceInfo } from '@/types'
 
 interface SessionStatusProps {
   session: SessionState
   className?: string
+  projectUrl?: string
+  onProjectUrlChange?: (url: string) => void
+  onRefresh?: () => void
+  error?: string | null
 }
 
 const deviceIcons: Record<string, typeof Music> = {
@@ -31,7 +36,22 @@ function DeviceChip({ device }: { device: DeviceInfo }) {
   )
 }
 
-export function SessionStatus({ session, className }: SessionStatusProps) {
+export function SessionStatus({
+  session,
+  className,
+  projectUrl = '',
+  onProjectUrlChange,
+  onRefresh,
+  error,
+}: SessionStatusProps) {
+  const [inputValue, setInputValue] = useState(projectUrl)
+
+  const handleConnect = () => {
+    onProjectUrlChange?.(inputValue)
+    // Trigger refresh after a short delay to allow state update
+    setTimeout(() => onRefresh?.(), 100)
+  }
+
   if (!session.connected) {
     return (
       <div className={cn('space-y-3', className)}>
@@ -39,9 +59,36 @@ export function SessionStatus({ session, className }: SessionStatusProps) {
           <WifiOff className="w-4 h-4 text-muted-foreground" />
           <span className="text-muted-foreground">Not connected</span>
         </div>
-        <p className="text-xs text-muted-foreground">
-          Open a project in Audiotool to connect
-        </p>
+
+        <div className="space-y-2">
+          <label className="text-xs text-muted-foreground block">
+            Paste your Audiotool project URL:
+          </label>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              placeholder="https://audiotool.com/studio?project=..."
+              className="flex-1 px-2 py-1.5 text-xs rounded bg-secondary/50 border border-border/50 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+            <button
+              type="button"
+              onClick={handleConnect}
+              disabled={!inputValue.trim()}
+              className="px-3 py-1.5 text-xs rounded bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+            >
+              <Link className="w-3 h-3" />
+              Connect
+            </button>
+          </div>
+          {error && (
+            <p className="text-xs text-destructive">{error}</p>
+          )}
+          <p className="text-xs text-muted-foreground">
+            Open a project in Audiotool, copy the URL from your browser
+          </p>
+        </div>
       </div>
     )
   }

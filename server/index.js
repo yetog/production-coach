@@ -2,6 +2,9 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import fetch from 'node-fetch';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { parseActionFromResponse } from './lib/parse-action.js';
 import { buildChatRequest, describeProviders, resolveProvider } from './lib/chat-provider.js';
 import {
@@ -13,6 +16,27 @@ import {
 } from './lib/guards.js';
 
 dotenv.config();
+
+// Logging setup
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const LOGS_DIR = path.join(__dirname, 'logs');
+if (!fs.existsSync(LOGS_DIR)) {
+  fs.mkdirSync(LOGS_DIR, { recursive: true });
+}
+
+function logChat(entry) {
+  const date = new Date().toISOString().split('T')[0];
+  const logFile = path.join(LOGS_DIR, `chat-${date}.jsonl`);
+  const line = JSON.stringify({ ...entry, timestamp: new Date().toISOString() }) + '\n';
+  fs.appendFileSync(logFile, line);
+}
+
+function logNexus(entry) {
+  const date = new Date().toISOString().split('T')[0];
+  const logFile = path.join(LOGS_DIR, `nexus-${date}.jsonl`);
+  const line = JSON.stringify({ ...entry, timestamp: new Date().toISOString() }) + '\n';
+  fs.appendFileSync(logFile, line);
+}
 
 const app = express();
 const PORT = process.env.PORT || 3021;
@@ -171,6 +195,18 @@ app.post('/api/chat', async (req, res) => {
     // Parse for potential device suggestions
     const action = parseActionFromResponse(content);
 
+    // Log chat for eval/fine-tuning
+    logChat({
+      type: 'chat',
+      goal: goal || null,
+      sessionInfo: sessionInfo || null,
+      userMessage: validated.messages[validated.messages.length - 1]?.content || '',
+      response: content,
+      action: action,
+      model: CHAT_PROVIDER.model,
+      provider: CHAT_PROVIDER.id,
+    });
+
     res.json({
       content,
       action,
@@ -241,6 +277,62 @@ app.post('/api/tts', async (req, res) => {
     res.status(timedOut ? 504 : 500).json({
       error: timedOut ? 'Speech service did not respond in time' : 'Failed to generate speech',
     });
+  }
+});
+
+// View chat logs (for eval/fine-tuning)
+app.get('/api/logs/chat', (req, res) => {
+  try {
+    const date = req.query.date || new Date().toISOString().split('T')[0];
+    const logFile = path.join(LOGS_DIR, `chat-${date}.jsonl`);
+
+    if (!fs.existsSync(logFile)) {
+      return res.json({ date, entries: [], message: 'No logs for this date' });
+    }
+
+    const content = fs.readFileSync(logFile, 'utf-8');
+    const entries = content.trim().split('\n').filter(Boolean).map(line => {
+      try { return JSON.parse(line); } catch { return null; }
+    }).filter(Boolean);
+
+    res.json({ date, entries, count: entries.length });
+  } catch (error) {
+    console.error('Error reading logs:', error);
+    res.status(500).json({ error: 'Failed to read logs' });
+  }
+});
+
+// View NEXUS logs
+app.get('/api/logs/nexus', (req, res) => {
+  try {
+    const date = req.query.date || new Date().toISOString().split('T')[0];
+    const logFile = path.join(LOGS_DIR, `nexus-${date}.jsonl`);
+
+    if (!fs.existsSync(logFile)) {
+      return res.json({ date, entries: [], message: 'No logs for this date' });
+    }
+
+    const content = fs.readFileSync(logFile, 'utf-8');
+    const entries = content.trim().split('\n').filter(Boolean).map(line => {
+      try { return JSON.parse(line); } catch { return null; }
+    }).filter(Boolean);
+
+    res.json({ date, entries, count: entries.length });
+  } catch (error) {
+    console.error('Error reading logs:', error);
+    res.status(500).json({ error: 'Failed to read logs' });
+  }
+});
+
+// Log NEXUS calls (called from frontend or bridge)
+app.post('/api/logs/nexus', (req, res) => {
+  try {
+    const { type, command, plan, result, project } = req.body || {};
+    logNexus({ type, command, plan, result, project });
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Error writing nexus log:', error);
+    res.status(500).json({ error: 'Failed to write log' });
   }
 });
 

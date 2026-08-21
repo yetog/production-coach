@@ -7,6 +7,20 @@
  * through the Vite dev proxy, which is why it binds loopback and sends no CORS
  * headers - see bridge.ts.
  */
+
+// Polyfill for Promise.withResolvers (requires Node 22+, we're on Node 20)
+if (typeof Promise.withResolvers !== "function") {
+  Promise.withResolvers = function <T>() {
+    let resolve!: (value: T | PromiseLike<T>) => void
+    let reject!: (reason?: unknown) => void
+    const promise = new Promise<T>((res, rej) => {
+      resolve = res
+      reject = rej
+    })
+    return { promise, resolve, reject }
+  }
+}
+
 import { createBridge } from "./agent/bridge.js"
 import { createAgentService } from "./agent/service.js"
 import { createClientFromEnv } from "./auth.js"

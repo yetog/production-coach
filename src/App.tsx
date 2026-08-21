@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Send, Mic, MicOff, Menu, Sparkles, ChevronDown, Zap } from 'lucide-react'
+import { Send, Mic, MicOff, Menu, Sparkles, ChevronDown, Zap, Link, RefreshCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { HeroAvatar } from '@/components/HeroAvatar'
 import { Sidebar } from '@/components/Sidebar'
@@ -21,7 +21,8 @@ function App() {
   // The whole agent surface, not just session/addDevice: CommandCenter needs
   // plan/apply/undo to drive real DAW edits (#24).
   const agent = useNexus()
-  const { session, addDevice, applyCommand } = agent
+  const { session, addDevice, applyCommand, projectUrl, setProjectUrl, refreshDevices, error: agentError } = agent
+  const [projectInput, setProjectInput] = useState(projectUrl)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [settings, setSettings] = useState<CoachSettings>({
     chattiness: 50,
@@ -187,6 +188,44 @@ function App() {
           <div className="px-4 pb-3">
             <HeroAvatar state={effectiveState} />
           </div>
+
+          {/* Project URL input - show when not connected */}
+          {!session.connected && (
+            <div className="px-4 pb-3">
+              <div className="p-3 rounded-xl bg-yellow-500/10 border border-yellow-500/30">
+                <label className="text-xs text-yellow-400 block mb-2">
+                  Connect to your Audiotool project:
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={projectInput}
+                    onChange={(e) => setProjectInput(e.target.value)}
+                    placeholder="Paste your Audiotool studio URL..."
+                    className="flex-1 px-3 py-2 text-sm rounded-lg bg-secondary/50 border border-border/50 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-yellow-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProjectUrl(projectInput)
+                      setTimeout(() => refreshDevices(), 100)
+                    }}
+                    disabled={!projectInput.trim()}
+                    className="px-4 py-2 text-sm rounded-lg bg-yellow-500 text-black font-medium hover:bg-yellow-400 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                  >
+                    <Link className="w-4 h-4" />
+                    Connect
+                  </button>
+                </div>
+                {agentError && (
+                  <p className="text-xs text-red-400 mt-2">{agentError}</p>
+                )}
+                <p className="text-xs text-muted-foreground mt-2">
+                  Open your project in Audiotool, then copy the URL from your browser
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Goal Banner (shown after goal is set) */}
           {goal && !showGoalInput && (

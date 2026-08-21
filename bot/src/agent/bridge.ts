@@ -17,8 +17,27 @@
  *    package, and nothing between the route table and the service.
  */
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http"
+import { appendFileSync, existsSync, mkdirSync } from "node:fs"
+import { join, dirname } from "node:path"
+import { fileURLToPath } from "node:url"
 import type { AgentService } from "./service.js"
 import { AgentError } from "./service.js"
+
+// Logging for eval/fine-tuning
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const LOGS_DIR = join(__dirname, "..", "..", "logs")
+if (!existsSync(LOGS_DIR)) mkdirSync(LOGS_DIR, { recursive: true })
+
+function logNexus(entry: Record<string, unknown>): void {
+  const date = new Date().toISOString().split("T")[0]
+  const logFile = join(LOGS_DIR, `nexus-${date}.jsonl`)
+  const line = JSON.stringify({ ...entry, timestamp: new Date().toISOString() }) + "\n"
+  try {
+    appendFileSync(logFile, line)
+  } catch (e) {
+    console.error("[bridge] log write failed:", e)
+  }
+}
 
 /** Requests are small JSON documents; anything larger is a mistake or an attack. */
 const MAX_BODY_BYTES = 1_000_000
@@ -116,21 +135,36 @@ async function handle(
 type Handler = (service: AgentService, body: Record<string, unknown>) => Promise<unknown>
 
 const POST_ROUTES: Record<string, Handler> = {
-  "/api/projects/analyze": async (service, body) =>
-    await service.analyze(optionalString(body, "project")),
+  "/api/projects/analyze": async (service, body) => {
+    const result = await service.analyze(optionalString(body, "project"))
+    logNexus({ type: "analyze", project: optionalString(body, "project"), result })
+    return result
+  },
 
-  "/api/producer/plan": async (service, body) =>
-    await service.plan(optionalString(body, "project"), requiredString(body, "command")),
+  "/api/producer/plan": async (service, body) => {
+    const command = requiredString(body, "command")
+    const project = optionalString(body, "project")
+    const result = await service.plan(project, command)
+    logNexus({ type: "plan", project, command, result })
+    return result
+  },
 
-  "/api/producer/apply": async (service, body) =>
-    await service.apply(
-      optionalString(body, "project"),
-      requiredString(body, "command"),
-      optionalString(body, "planId"),
-    ),
+  "/api/producer/apply": async (service, body) => {
+    const command = requiredString(body, "command")
+    const project = optionalString(body, "project")
+    const planId = optionalString(body, "planId")
+    const result = await service.apply(project, command, planId)
+    logNexus({ type: "apply", project, command, planId, result })
+    return result
+  },
 
-  "/api/producer/undo": async (service, body) =>
-    await service.undo(optionalString(body, "project"), optionalString(body, "actionId")),
+  "/api/producer/undo": async (service, body) => {
+    const project = optionalString(body, "project")
+    const actionId = optionalString(body, "actionId")
+    const result = await service.undo(project, actionId)
+    logNexus({ type: "undo", project, actionId, result })
+    return result
+  },
 }
 
 /** A transport-level failure with a status the client should see. */
