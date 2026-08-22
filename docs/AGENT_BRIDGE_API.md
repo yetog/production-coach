@@ -206,6 +206,9 @@ docker compose up --build
 ```
 
 Open `http://localhost:5173/production-coach/`. The bridge defaults to
-loopback outside containers; Compose explicitly uses `AGENT_BRIDGE_HOST=0.0.0.0`
+loopback outside containers and in the current Compose fixture. The Compose
+stack is not an approved production deployment until authenticated
+server-to-server routing is added; do not change the bind host to expose the
+PAT-bearing bridge.
 only for the private container network. Never publish port 3022 or put the PAT
 in the web/chat service environment.

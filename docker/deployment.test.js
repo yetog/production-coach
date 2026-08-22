@@ -10,7 +10,7 @@ describe('container deployment topology', () => {
     expect(compose).toMatch(/\n  chat:/)
     expect(compose).toMatch(/\n  agent:/)
     expect(compose).toContain('AGENT_BRIDGE_URL=http://agent:3022/api')
-    expect(compose).toContain('AGENT_BRIDGE_HOST=0.0.0.0')
+    expect(compose).not.toContain('AGENT_BRIDGE_HOST=0.0.0.0')
     expect(compose).not.toMatch(/agent:[\s\S]*?ports:/)
   })
 
@@ -23,8 +23,8 @@ describe('container deployment topology', () => {
 
   it('routes the production SPA API paths to the correct internal services', () => {
     const nginx = read('./nginx.conf')
-    expect(nginx).toContain('proxy_pass http://agent:3022/api/projects/')
-    expect(nginx).toContain('proxy_pass http://agent:3022/api/producer/')
+    expect(nginx).not.toContain('proxy_pass http://agent:3022/api/projects/')
+    expect(nginx).not.toContain('proxy_pass http://agent:3022/api/producer/')
     expect(nginx).toContain('proxy_pass http://chat:3021/api/')
   })
 })

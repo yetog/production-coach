@@ -14,6 +14,5 @@ RUN npm ci --omit=dev
 COPY --from=builder /app/dist ./dist
 
 ENV NODE_ENV=production
-ENV AGENT_BRIDGE_HOST=0.0.0.0
 EXPOSE 3022
 CMD ["node", "dist/bridge-server.js"]

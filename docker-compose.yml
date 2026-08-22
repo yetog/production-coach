@@ -36,6 +36,9 @@ services:
       - agent
 
   agent:
+    # Deliberately not wired to the public web proxy. This service is not a
+    # production deployment until authenticated server-to-server routing is
+    # added; keeping the default loopback bind prevents accidental exposure.
     build:
       context: ./bot
       dockerfile: Dockerfile
@@ -43,7 +46,6 @@ services:
       - AUDIOTOOL_PAT
       - AUDIOTOOL_PROJECT_URL=${AUDIOTOOL_PROJECT_URL:-}
       - AGENT_BRIDGE_PORT=3022
-      - AGENT_BRIDGE_HOST=0.0.0.0
     expose:
       - "3022"
     restart: unless-stopped
