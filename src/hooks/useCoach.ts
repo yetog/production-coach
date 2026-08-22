@@ -41,6 +41,7 @@ function saveToStorage<T>(key: string, value: T): void {
 }
 
 interface UseCoachOptions {
+  project?: string
   session: SessionState
   onAddDevice?: (type: string, displayName?: string) => Promise<unknown>
   /** Apply a producer command the coach proposed (issue #53) — 808 / musical moves. */
@@ -50,7 +51,7 @@ interface UseCoachOptions {
   voiceEnabled?: boolean
 }
 
-export function useCoach({ session, onAddDevice, onApplyCommand, onApplyPlan, voiceEnabled = false }: UseCoachOptions) {
+export function useCoach({ project, session, onAddDevice, onApplyCommand, onApplyPlan, voiceEnabled = false }: UseCoachOptions) {
   const { sendAgentChat, speak, isSpeaking, stopSpeaking, isLoading: apiLoading } = useApi()
 
   const actionFromPlan = (plan: AgentPlanSummary | undefined): CoachAction | undefined => {
@@ -127,7 +128,8 @@ export function useCoach({ session, onAddDevice, onApplyCommand, onApplyPlan, vo
           bpm: session.bpm ?? undefined,
           key: session.key ?? undefined,
           devices: session.devices,
-        }
+        },
+        project,
       )
 
       const coachMessage: ChatMessage = {
@@ -159,7 +161,7 @@ export function useCoach({ session, onAddDevice, onApplyCommand, onApplyPlan, vo
       setIsLoading(false)
       if (!voiceEnabled) setState('idle')
     }
-  }, [sendAgentChat, speak, session, voiceEnabled])
+  }, [project, sendAgentChat, speak, session, voiceEnabled])
 
   // Send message to coach
   const sendMessage = useCallback(async (content: string) => {
@@ -190,7 +192,8 @@ export function useCoach({ session, onAddDevice, onApplyCommand, onApplyPlan, vo
           bpm: session.bpm ?? undefined,
           key: session.key ?? undefined,
           devices: session.devices,
-        }
+        },
+        project,
       )
 
       const coachMessage: ChatMessage = {
@@ -222,7 +225,7 @@ export function useCoach({ session, onAddDevice, onApplyCommand, onApplyPlan, vo
       setIsLoading(false)
       if (!voiceEnabled || !isSpeaking) setState('idle')
     }
-  }, [messages, goal, session, sendAgentChat, speak, voiceEnabled, isSpeaking])
+  }, [messages, goal, project, session, sendAgentChat, speak, voiceEnabled, isSpeaking])
 
   // Apply an action — either a device add (#40) or an 808/musical move (#53).
   const applyAction = useCallback(async (action: CoachAction) => {

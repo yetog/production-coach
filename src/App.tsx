@@ -44,6 +44,7 @@ function App() {
     clearConversation,
     stopSpeaking,
   } = useCoach({
+    project: projectUrl,
     session,
     onAddDevice: addDevice,
     onApplyCommand: applyCommand,
