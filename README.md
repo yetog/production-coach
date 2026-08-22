@@ -25,7 +25,7 @@ node index.js
 |-----------|--------|-------|
 | Frontend UI | **v1 Complete** | Isayah |
 | Backend API | **v1 Complete** | Isayah |
-| NEXUS SDK Integration | **Not Started** | Nolan |
+| NEXUS SDK Integration | **Agent bridge + producer MVP implemented; unified Dr. Zay tool loop in progress** | Nolan |
 | QA Testing | **In Progress** | Arian |
 
 ---
@@ -60,11 +60,11 @@ node index.js
 - Dr. Zay system prompt with coaching persona
 - Device suggestion parsing from AI responses
 
-## What's NOT Built Yet
+## Current Gaps / In Progress
 
-- NEXUS SDK connection (real Audiotool session data)
-- Device adding functionality
-- Real-time session state (BPM, key, devices)
+- Unified Dr. Zay tool loop and shared chat/producer event protocol
+- Chrome extension side-panel feature parity and live browser QA
+- Multi-step live agent behavior across all producer actions
 - Chattiness slider functionality
 - Persona switching
 

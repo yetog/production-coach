@@ -8,7 +8,11 @@ import type { SessionReport } from "../analyze/analyzer.js"
 // Minimal session fixture
 function makeSession(overrides: Partial<SessionReport> = {}): SessionReport {
   return {
+    tempoBpm: 128,
+    signature: "4/4",
     lengthBars: 64,
+    shape: "arranged",
+    inventory: { drums: 1, bass: 1, synths: 1, effects: 0, sequencers: 0, mixers: 1, routing: 1, other: 0 },
     sections: [
       { label: "intro", startBar: 1, endBar: 16, density: 2, confidence: 0.9 },
       { label: "build", startBar: 17, endBar: 32, density: 4, confidence: 0.85 },
@@ -16,8 +20,7 @@ function makeSession(overrides: Partial<SessionReport> = {}): SessionReport {
       { label: "outro", startBar: 49, endBar: 64, density: 2, confidence: 0.8 },
     ],
     drop: { label: "drop", startBar: 33, endBar: 48, density: 8, confidence: 0.95 },
-    deviceCount: 5,
-    noteCount: 200,
+    risks: [],
     ...overrides,
   }
 }
