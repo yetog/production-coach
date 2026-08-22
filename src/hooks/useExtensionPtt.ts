@@ -45,7 +45,7 @@ export function useExtensionPtt({
 
     window.addEventListener(PTT_EVENT, handler)
     const messageHandler = (event: MessageEvent) => {
-      if (isExtensionMessage(event.data)) handler()
+      if (isExtensionMessage(event.data, event.origin)) handler()
     }
     window.addEventListener('message', messageHandler)
     return () => {
