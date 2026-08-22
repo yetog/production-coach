@@ -35,9 +35,11 @@ export async function getActiveProjectContext(chrome) {
 
 /** Background-side contract shared by the side panel and future native UI. */
 export function registerExtensionRouter(chrome) {
-  const listener = chrome.runtime?.onMessage?.addListener
-  if (listener === undefined) return
-  listener((message, _sender, sendResponse) => {
+  if (chrome.runtime?.onMessage?.addListener === undefined) return
+  // Chrome extension API methods are receiver-bound. Calling a detached
+  // `addListener` produces `Illegal invocation` and prevents the MV3 worker
+  // from registering at all (Chrome reports status code 15).
+  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message?.type !== "drzay:get-context") return undefined
     void getActiveProjectContext(chrome).then(sendResponse)
     return true

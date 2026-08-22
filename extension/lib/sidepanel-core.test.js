@@ -40,4 +40,19 @@ describe("side panel integration", () => {
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(sendResponse).toHaveBeenCalledWith({ tabId: 9, project: "p9" })
   })
+
+  it("registers the listener with its Chrome runtime receiver", () => {
+    let listener
+    const runtime = {
+      onMessage: {
+        addListener(callback) {
+          if (this !== runtime.onMessage) throw new TypeError("Illegal invocation")
+          listener = callback
+        },
+      },
+    }
+
+    registerExtensionRouter({ runtime })
+    expect(listener).toBeTypeOf("function")
+  })
 })
