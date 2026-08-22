@@ -7,6 +7,7 @@
     "service_worker": "background.js",
     "type": "module"
   },
+  "permissions": ["tabs"],
   "action": {
     "default_title": "Open Dr. Zay"
   },
@@ -17,6 +18,8 @@
     {
       "matches": [
         "https://zaylegend.com/*",
+        "https://audiotool.com/*",
+        "https://www.audiotool.com/*",
         "http://localhost/*",
         "http://127.0.0.1/*"
       ],
@@ -26,6 +29,8 @@
   ],
   "host_permissions": [
     "https://zaylegend.com/*",
+    "https://audiotool.com/*",
+    "https://www.audiotool.com/*",
     "http://localhost/*",
     "http://127.0.0.1/*"
   ],

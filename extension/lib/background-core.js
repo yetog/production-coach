@@ -16,6 +16,8 @@ export const APP_URL_PATTERNS = [
   "https://zaylegend.com/*",
   "http://localhost/*",
   "http://127.0.0.1/*",
+  "https://audiotool.com/*",
+  "https://www.audiotool.com/*",
 ]
 
 export function registerCommandHandler(chrome) {

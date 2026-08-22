@@ -59,4 +59,8 @@ describe("manifest.json", () => {
     expect(manifest.side_panel.default_path).toBe("sidepanel.html")
     expect(manifest.content_security_policy.extension_pages).toContain("frame-src")
   })
+
+  it("requests only tab metadata needed to bind the panel to Audiotool", () => {
+    expect(manifest.permissions).toContain("tabs")
+  })
 })
