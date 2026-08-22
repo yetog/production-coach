@@ -1,13 +1,49 @@
-version: '3.8'
-
 services:
-  production-coach:
+  web:
     build:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "3021:80"
+      - "5173:80"
     environment:
       - NODE_ENV=production
     restart: unless-stopped
-    container_name: production-coach
+    depends_on:
+      - chat
+      - agent
+
+  chat:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    environment:
+      - NODE_ENV=production
+      - PORT=3021
+      - AGENT_BRIDGE_URL=http://agent:3022/api
+      - CHAT_PROVIDER=${CHAT_PROVIDER:-ionos}
+      - IONOS_API_KEY=${IONOS_API_KEY:-}
+      - IONOS_CHAT_MODEL=${IONOS_CHAT_MODEL:-}
+      - IONOS_BASE_URL=${IONOS_BASE_URL:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_CHAT_MODEL=${OPENAI_CHAT_MODEL:-}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
+      - ELEVEN_LABS_API_KEY=${ELEVEN_LABS_API_KEY:-}
+      - ELEVEN_LABS_VOICE_ID=${ELEVEN_LABS_VOICE_ID:-}
+    expose:
+      - "3021"
+    restart: unless-stopped
+    depends_on:
+      - agent
+
+  agent:
+    build:
+      context: ./bot
+      dockerfile: Dockerfile
+    environment:
+      - AUDIOTOOL_PAT
+      - AUDIOTOOL_PROJECT_URL=${AUDIOTOOL_PROJECT_URL:-}
+      - AGENT_BRIDGE_PORT=3022
+      - AGENT_BRIDGE_HOST=0.0.0.0
+    expose:
+      - "3022"
+    restart: unless-stopped

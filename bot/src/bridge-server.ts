@@ -35,12 +35,12 @@ async function main(): Promise<void> {
   // credentials looks healthy and then 500s the moment anyone uses it.
   const client = await createClientFromEnv()
   const service = createAgentService({ client })
-  const bridge = createBridge({ service })
+  const bridge = createBridge({ service, host: process.env.AGENT_BRIDGE_HOST ?? "127.0.0.1" })
 
   const port = Number(process.env.AGENT_BRIDGE_PORT ?? DEFAULT_PORT)
   const { port: bound } = await bridge.listen(port)
 
-  console.log(`Production Coach agent bridge on http://127.0.0.1:${bound}`)
+  console.log(`Production Coach agent bridge on http://${process.env.AGENT_BRIDGE_HOST ?? "127.0.0.1"}:${bound}`)
   console.log(
     `  default project: ${
       process.env.AUDIOTOOL_PROJECT_URL ?? "(none set - send a `project` field per request)"

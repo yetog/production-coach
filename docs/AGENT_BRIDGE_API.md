@@ -191,3 +191,21 @@ npm --prefix server start     # :3021  chat + tts
 npm --prefix bot run bridge   # :3022  agent (needs bot/.env with AUDIOTOOL_PAT)
 npm run dev                   # :5173  UI
 ```
+
+## Container deployment
+
+The root `docker-compose.yml` starts the same three boundaries as local
+development: `web` (Nginx SPA), `chat` (Dr. Zay + TTS), and `agent` (the
+PAT-bearing Nexus bridge). The agent is reachable only on the compose network;
+its port is not published to the host.
+
+```bash
+export AUDIOTOOL_PAT=... AUDIOTOOL_PROJECT_URL=...
+export OPENAI_API_KEY=... # or IONOS_API_KEY=...
+docker compose up --build
+```
+
+Open `http://localhost:5173/production-coach/`. The bridge defaults to
+loopback outside containers; Compose explicitly uses `AGENT_BRIDGE_HOST=0.0.0.0`
+only for the private container network. Never publish port 3022 or put the PAT
+in the web/chat service environment.
