@@ -15,7 +15,10 @@ objects or Audiotool credentials.
 The web app and Chrome extension are clients of one agent protocol. The chat
 provider and the loopback Audiotool bridge remain separate processes for the
 first slice. The browser does not mediate model-to-bridge credentials or
-reimplement producer logic.
+reimplement producer logic. A container deployment must preserve this
+boundary with authenticated server-to-server routing; binding the PAT-bearing
+bridge to `0.0.0.0` or proxying it directly to an unauthenticated browser is
+not an approved topology.
 
 ## Context
 
@@ -100,11 +103,10 @@ The bridge remains loopback-only and holds `AUDIOTOOL_PAT`. The chat server
 does not receive the PAT. The extension and browser receive structured plans,
 tool results, and status events only.
 
-The first implementation may use server-to-server calls from the chat service
-to an authenticated local bridge. If the deployment target cannot safely make
-that call, the protocol may remain browser-mediated temporarily, but the
-browser must still be limited to the bridge's existing plan/apply API and must
-never receive credentials or raw SDK objects. The topology choice must be
+The first implementation uses server-to-server calls from the chat service to
+the loopback bridge. If a deployment target cannot safely make that call, the
+agent deployment is not ready to ship; the browser must not be given a direct
+unauthenticated route to the PAT-bearing service. The topology choice must be
 recorded before production deployment.
 
 ## Safety and state
