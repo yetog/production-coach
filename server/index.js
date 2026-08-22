@@ -283,6 +283,11 @@ app.post('/api/dr-zay/chat/stream', async (req, res) => {
 // Chat completion with IONOS Model Hub
 app.post('/api/chat', async (req, res) => {
   try {
+    // Kept temporarily for older clients, but explicitly deprecated now that
+    // the web and extension clients use the typed Dr. Zay route. This prevents
+    // new clients from accidentally reviving the prose → regex boundary.
+    res.set('Deprecation', 'true')
+    res.set('Link', '</api/dr-zay/chat/stream>; rel="successor-version"')
     const { messages, goal, sessionInfo } = req.body ?? {};
 
     // Validate before anything else. A malformed request is a client error
