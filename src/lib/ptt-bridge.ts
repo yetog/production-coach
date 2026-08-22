@@ -12,9 +12,18 @@
 /** The window event the extension's content script dispatches on this page. */
 export const PTT_EVENT = "drzay:ptt-toggle"
 
-/** Message emitted by the MV3 side-panel parent into its embedded app iframe. */
-export function isExtensionMessage(value: unknown): boolean {
+/**
+ * Message emitted by the MV3 side-panel parent into its embedded app iframe.
+ *
+ * The payload alone is not proof of the sender: any page that frames the app
+ * can copy it. `origin` (the browser-set MessageEvent.origin) is the real
+ * discriminator — only an extension page can carry the chrome-extension://
+ * scheme, and a web attacker cannot forge it. The extension id is not pinned
+ * because unpacked installs get a different id per machine.
+ */
+export function isExtensionMessage(value: unknown, origin: string): boolean {
   if (typeof window === "undefined" || window === window.parent) return false
+  if (!origin.startsWith("chrome-extension://")) return false
   const event = value as { source?: unknown; type?: unknown } | null
   return event?.source === "dr-zay-extension" && event.type === PTT_EVENT
 }
