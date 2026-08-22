@@ -66,7 +66,16 @@ export function createProducerTools({ agent, project, approveApply = () => false
     undo_last_change: tool({
       description: "Undo an Audiotool action created by the producer agent.",
       inputSchema: undoSchema,
-      execute: async ({ actionId }) => await agent.undo(project, actionId),
+      needsApproval: true,
+      execute: async ({ actionId }) => {
+        if (!(await approveApply({ actionId, operation: "undo" }))) {
+          throw new ProducerToolError(
+            "approval_required",
+            "The user must explicitly approve undoing this producer change.",
+          )
+        }
+        return await agent.undo(project, actionId)
+      },
     }),
   }
 }
