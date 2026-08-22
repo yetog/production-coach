@@ -6,5 +6,7 @@
  * manifest, which is what allows this import.
  */
 import { registerCommandHandler } from "./lib/background-core.js"
+import { registerSidePanel } from "./lib/sidepanel-core.js"
 
 registerCommandHandler(chrome)
+void registerSidePanel(chrome)

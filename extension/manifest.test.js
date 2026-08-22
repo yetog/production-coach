@@ -53,4 +53,10 @@ describe("manifest.json", () => {
       expect(manifest.host_permissions, pattern).toContain(pattern)
     }
   })
+
+  it("provides a side panel and action entry point for the shared Dr. Zay client", () => {
+    expect(manifest.action.default_title).toBe("Open Dr. Zay")
+    expect(manifest.side_panel.default_path).toBe("sidepanel.html")
+    expect(manifest.content_security_policy.extension_pages).toContain("frame-src")
+  })
 })
