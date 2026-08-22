@@ -22,13 +22,14 @@ export function applyEvent(outcome: unknown, fallback: { planId?: string; summar
   } | null
   const verification = value?.verification
   const verified = verification?.ok === true
+  const failed = verification !== undefined && !verified
   return {
     kind: 'apply_outcome',
     planId: value?.plan?.planId ?? fallback.planId,
     actionId: value?.action?.actionId,
     command: value?.plan?.command,
     summary: value?.summary ?? fallback.summary,
-    status: verified ? 'verified' : 'applied',
+    status: verified ? 'verified' : failed ? 'failed' : 'applied',
     verification: verification
       ? {
           ok: verification.ok === true,

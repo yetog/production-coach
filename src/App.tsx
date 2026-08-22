@@ -476,12 +476,22 @@ function MessageBubble({
           <div className="flex flex-wrap items-center gap-3">
             <span className={cn(
               'inline-flex items-center gap-1.5 text-xs',
-              message.producerEvent?.status === 'undone' ? 'text-muted-foreground' : 'text-green-400',
+              message.producerEvent?.status === 'undone'
+                ? 'text-muted-foreground'
+                : message.producerEvent?.status === 'verified'
+                  ? 'text-green-400'
+                  : 'text-yellow-400',
             )}>
-              <span className="w-4 h-4 rounded-full bg-green-500/20 flex items-center justify-center">
-                <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+              <span className="w-4 h-4 rounded-full bg-current/20 flex items-center justify-center">
+                <span className="w-1.5 h-1.5 rounded-full bg-current" />
               </span>
-              {message.producerEvent?.status === 'undone' ? 'Undone' : 'Applied and verified'}
+              {message.producerEvent?.status === 'undone'
+                ? 'Undone'
+                : message.producerEvent?.status === 'verified'
+                  ? 'Applied and verified'
+                  : message.producerEvent?.status === 'failed'
+                    ? 'Applied; verification failed'
+                    : 'Applied; verification pending'}
             </span>
             {message.producerEvent?.status !== 'undone' && message.producerEvent?.actionId && (
               <button

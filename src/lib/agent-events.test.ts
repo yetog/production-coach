@@ -27,4 +27,14 @@ describe('producer lifecycle events', () => {
     expect(applied).toMatchObject({ kind: 'apply_outcome', actionId: 'a1', status: 'verified' })
     expect(undoEvent({ actionId: 'a1', summary: 'Removed it.' })).toMatchObject({ kind: 'undo', status: 'undone' })
   })
+
+  it('marks failed verification as failed rather than applied', () => {
+    expect(applyEvent({
+      action: { actionId: 'a1' },
+      verification: { ok: false, checked: 1, failures: ['missing device'] },
+    }, { summary: 'Added an 808.' })).toMatchObject({
+      status: 'failed',
+      verification: { ok: false, failures: ['missing device'] },
+    })
+  })
 })

@@ -194,11 +194,11 @@ export function useNexus() {
   )
 
   /** Undo the agent's last action. Removes only what the agent created. */
-  const undoLast = useCallback(async () => {
+  const undoLast = useCallback(async (actionId?: string) => {
     setBusy(true)
     setError(null)
     try {
-      const outcome = await agent.undo(projectId || undefined)
+      const outcome = await agent.undo(projectId || undefined, actionId)
       if (outcome !== null) setSharedUndo(outcome)
       await refresh()
       return outcome

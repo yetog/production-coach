@@ -86,10 +86,20 @@ describe("producer tool contract", () => {
 
   it("routes undo to the shared action log", async () => {
     const agent = fakeAgent()
-    const tools = createProducerTools({ agent, project: "projects/p1" })
+    const tools = createProducerTools({ agent, project: "projects/p1", approveApply: () => true })
 
     await tools.undo_last_change.execute({ actionId: "a1" })
 
     expect(agent.undo).toHaveBeenCalledWith("projects/p1", "a1")
+  })
+
+  it("refuses undo unless the server-side approval callback allows it", async () => {
+    const agent = fakeAgent()
+    const tools = createProducerTools({ agent, project: "projects/p1", approveApply: () => false })
+
+    await expect(tools.undo_last_change.execute({ actionId: "a1" })).rejects.toMatchObject({
+      code: "approval_required",
+    })
+    expect(agent.undo).not.toHaveBeenCalled()
   })
 })

@@ -50,7 +50,7 @@ interface UseCoachOptions {
   /** Apply a plan already previewed in the agent conversation. */
   onApplyPlan?: (command: string, planId: string) => Promise<unknown>
   /** Undo the last verified producer action through the same AgentService. */
-  onUndo?: () => Promise<unknown>
+  onUndo?: (actionId?: string) => Promise<unknown>
   /** Publish a typed chat plan to other producer clients in the same session. */
   onPlan?: (plan: AgentPlanSummary) => void
   /** Re-plan a persisted pending request against current Audiotool state. */
@@ -319,14 +319,19 @@ export function useCoach({ project, session, onAddDevice, onApplyCommand, onAppl
     )
 
     // Add confirmation
+    const verified = event.status === 'verified'
     const confirmation: ChatMessage = {
       id: `confirm-${Date.now()}`,
       role: 'coach',
-      content: `Done! ${what} is now in your session. What's next?`,
+      content: verified
+        ? `Done! ${what} is now in your session and verified. What's next?`
+        : event.status === 'failed'
+          ? `I applied ${what}, but verification failed: ${event.verification?.failures?.join('; ') || 'the result could not be confirmed'}. Please inspect the session before continuing.`
+          : `I applied ${what}, but the bridge did not return verification. Please inspect the session before continuing.`,
       timestamp: new Date(),
       producerEvent: {
         ...event,
-        kind: 'verification',
+        kind: verified ? 'verification' : 'failure',
       },
     }
     setMessages(prev => [...prev, confirmation])
@@ -338,7 +343,10 @@ export function useCoach({ project, session, onAddDevice, onApplyCommand, onAppl
 
   const undoLastAction = useCallback(async (messageId?: string) => {
     if (onUndo === undefined) return
-    const outcome = await onUndo()
+    const targetActionId = messageId === undefined
+      ? undefined
+      : messages.find((message) => message.id === messageId)?.producerEvent?.actionId
+    const outcome = await onUndo(targetActionId)
     if (outcome === null || outcome === false) return
     const event = undoEvent(outcome)
     setMessages(prev => prev.map(message => {
@@ -354,7 +362,7 @@ export function useCoach({ project, session, onAddDevice, onApplyCommand, onAppl
       timestamp: new Date(),
       producerEvent: event,
     }])
-  }, [onUndo])
+  }, [messages, onUndo])
 
   // Update checklist item
   const toggleChecklistItem = useCallback((itemId: number) => {
