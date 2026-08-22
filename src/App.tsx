@@ -52,6 +52,7 @@ function App() {
     onApplyPlan: (command, planId) => agent.applyPlan(command, planId),
     onUndo: agent.undoLast,
     onPlan: agent.recordPlan,
+    onRehydratePlan: agent.planCommand,
     voiceEnabled: settings.voiceEnabled,
   })
 

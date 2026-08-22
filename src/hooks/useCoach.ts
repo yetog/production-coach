@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import type { ChatMessage, CoachAction, ChecklistItem, CoachState, SessionState } from '@/types'
 import { DEFAULT_CHECKLIST } from '@/types'
 import { resolveActionRoute } from '@/lib/coach-action'
@@ -53,11 +53,16 @@ interface UseCoachOptions {
   onUndo?: () => Promise<unknown>
   /** Publish a typed chat plan to other producer clients in the same session. */
   onPlan?: (plan: AgentPlanSummary) => void
+  /** Re-plan a persisted pending request against current Audiotool state. */
+  onRehydratePlan?: (command: string) => Promise<AgentPlanSummary | null>
   voiceEnabled?: boolean
 }
 
-export function useCoach({ project, session, onAddDevice, onApplyCommand, onApplyPlan, onUndo, onPlan, voiceEnabled = false }: UseCoachOptions) {
+export function useCoach({ project, session, onAddDevice, onApplyCommand, onApplyPlan, onUndo, onPlan, onRehydratePlan, voiceEnabled = false }: UseCoachOptions) {
   const { sendAgentChat, speak, isSpeaking, stopSpeaking, isLoading: apiLoading } = useApi()
+  const rehydrateCallback = useRef(onRehydratePlan)
+  const rehydratedMessages = useRef(new Set<string>())
+  rehydrateCallback.current = onRehydratePlan
 
   const actionFromPlan = (plan: AgentPlanSummary | undefined): CoachAction | undefined => {
     if (!isActionablePlan(plan)) return undefined
@@ -117,6 +122,41 @@ export function useCoach({ project, session, onAddDevice, onApplyCommand, onAppl
   useEffect(() => {
     saveToStorage(STORAGE_KEYS.goal, goal)
   }, [goal])
+
+  // A plan id is a snapshot of current project state. Re-plan persisted
+  // pending requests after reconnect so Apply can only use a fresh id.
+  useEffect(() => {
+    if (!project || rehydrateCallback.current === undefined) return
+    for (const message of messages) {
+      const event = message.producerEvent
+      if (
+        event === undefined ||
+        (event.kind !== 'plan' && event.kind !== 'clarification') ||
+        typeof event.command !== 'string'
+      ) continue
+      const key = `${project}:${message.id}`
+      if (rehydratedMessages.current.has(key)) continue
+      rehydratedMessages.current.add(key)
+      void rehydrateCallback.current(event.command).then((plan) => {
+        if (plan === null) return
+        const refreshedEvent = planEvent(plan)
+        setMessages((previous) => previous.map((candidate) => {
+          if (candidate.id !== message.id) return candidate
+          const refreshedAction = actionFromPlan(plan)
+          return {
+            ...candidate,
+            producerEvent: refreshedEvent,
+            action: candidate.action?.applied
+              ? { ...candidate.action, params: { ...candidate.action.params, command: plan.command, planId: plan.planId } }
+              : refreshedAction,
+          }
+        }))
+      }).catch(() => {
+        // Keep the persisted preview visible; Apply will surface the bridge
+        // error rather than silently claiming the old plan is current.
+      })
+    }
+  }, [messages, project])
 
   // Set production goal
   const setProductionGoal = useCallback(async (newGoal: string) => {
