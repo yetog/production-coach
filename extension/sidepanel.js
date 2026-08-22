@@ -1,4 +1,8 @@
-const APP_URL = "https://zaylegend.com/production-coach/"
+// The hosted site currently sends X-Frame-Options: SAMEORIGIN, so Chrome
+// refuses to embed it in an extension side panel. Use the local Vite app for
+// unpacked-extension QA; a production package must point this at a deployment
+// that explicitly allows framing from the extension origin.
+const APP_URL = "http://localhost:5174/production-coach/"
 const frame = document.getElementById("dr-zay-app")
 
 if (frame instanceof HTMLIFrameElement) {
