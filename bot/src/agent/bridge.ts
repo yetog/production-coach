@@ -50,8 +50,9 @@ export interface Bridge {
   readonly address: string
 }
 
-export function createBridge(deps: { service: AgentService }): Bridge {
+export function createBridge(deps: { service: AgentService; host?: string }): Bridge {
   const { service } = deps
+  const host = deps.host ?? process.env.AGENT_BRIDGE_HOST ?? LOOPBACK
 
   const server = createServer((req, res) => {
     handle(req, res, service).catch((error: unknown) => {
@@ -62,7 +63,7 @@ export function createBridge(deps: { service: AgentService }): Bridge {
   })
 
   return {
-    address: LOOPBACK,
+    address: host,
     listen: async (port) =>
       await new Promise((resolve, reject) => {
         // Without this, a port already in use leaves the promise pending and
@@ -77,7 +78,7 @@ export function createBridge(deps: { service: AgentService }): Bridge {
           )
         }
         server.once("error", onError)
-        server.listen(port, LOOPBACK, () => {
+        server.listen(port, host, () => {
           server.removeListener("error", onError)
           const info = server.address()
           resolve({ port: typeof info === "object" && info !== null ? info.port : port })

@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "description": "Read-only NEXUS bot for Production Coach - joins a live Audiotool session and streams normalized read events",
   "type": "module",
+  "overrides": {
+    "undici": "^6.28.0"
+  },
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",

@@ -25,8 +25,8 @@ node index.js
 |-----------|--------|-------|
 | Frontend UI | **v1 Complete** | Isayah |
 | Backend API | **v1 Complete** | Isayah |
-| NEXUS SDK Integration | **Not Started** | Nolan |
-| QA Testing | **In Progress** | Arian |
+| NEXUS SDK Integration | **Unified typed Dr. Zay tool loop + AgentService bridge implemented** | Nolan |
+| QA Testing | **Automated QA complete; live write/browser gates pending** | Arian |
 
 ---
 
@@ -60,11 +60,13 @@ node index.js
 - Dr. Zay system prompt with coaching persona
 - Device suggestion parsing from AI responses
 
-## What's NOT Built Yet
+## Current Release Gates
 
-- NEXUS SDK connection (real Audiotool session data)
-- Device adding functionality
-- Real-time session state (BPM, key, devices)
+- Live Audiotool apply → verify → undo against an approved test project
+- Browser-level unpacked Chrome extension E2E
+
+## Deferred Follow-ups
+
 - Chattiness slider functionality
 - Persona switching
 
@@ -74,7 +76,7 @@ node index.js
 
 - **Frontend:** React 18, TypeScript, Vite, Tailwind CSS
 - **Backend:** Express.js, Node.js
-- **AI:** IONOS Model Hub (Llama 3.1 8B)
+- **AI:** Vercel AI SDK tool loop with OpenAI/IONOS-compatible providers
 - **Voice:** ElevenLabs TTS, Web Speech API STT
 - **Hosting:** Nginx reverse proxy
 

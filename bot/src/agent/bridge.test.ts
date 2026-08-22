@@ -215,6 +215,12 @@ describe("the PAT stays server-side", () => {
     expect(bridge.address).toBe("127.0.0.1")
   })
 
+  it("allows an explicit internal-container host while keeping loopback the default", async () => {
+    const internal = createBridge({ service: stubService(), host: "0.0.0.0" })
+    expect(internal.address).toBe("0.0.0.0")
+    await internal.close()
+  })
+
   it("never includes credentials in any response", async () => {
     process.env.AUDIOTOOL_PAT = "at_pat_should_never_appear"
     const service = stubService()
