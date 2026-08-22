@@ -3,7 +3,7 @@ import viteConfig from './vite.config'
 
 export default mergeConfig(viteConfig, defineConfig({
   test: {
-    include: ['src/**/*.test.ts', 'bot/**/*.test.ts', 'extension/**/*.test.js'],
+    include: ['src/**/*.test.ts', 'bot/**/*.test.ts', 'extension/**/*.test.js', 'docker/**/*.test.js'],
     environment: 'node',
     // Nexus document fixtures can exceed Vitest's 5s default on a busy
     // runner. Keep them bounded without turning scheduler contention into a
