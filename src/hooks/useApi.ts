@@ -11,10 +11,23 @@ interface ChatMessage {
 
 import type { CoachAction } from '@/types'
 
-interface ChatResponse {
+export interface AgentPlanSummary {
+  planId: string
+  command: string
+  intent: string
+  interpretedIntent: string
+  target: { section?: string; startBar: number; endBar: number; confidence: number }
+  actions: Array<Record<string, unknown>>
+  summary: string
+  requiresConfirmation: boolean
+  clarification?: string
+}
+
+export interface ChatResponse {
   content: string
   action?: CoachAction
   model?: string
+  plan?: AgentPlanSummary
 }
 
 interface SessionInfo {
@@ -65,6 +78,37 @@ export function useApi() {
       return data
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to get response'
+      setError(errorMsg)
+      throw err
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
+
+  // Agent chat uses typed producer tools and the shared plan/apply service.
+  const sendAgentChat = useCallback(async (
+    messages: ChatMessage[],
+    goal?: string | null,
+    sessionInfo?: SessionInfo,
+    project?: string,
+  ): Promise<ChatResponse> => {
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      const res = await fetch(`${API_BASE}/agent/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages, goal, sessionInfo, project }),
+      })
+
+      const data = await res.json().catch(() => undefined)
+      if (!res.ok) {
+        throw new Error(data?.error ?? `Agent API error: ${res.status}`)
+      }
+      return data as ChatResponse
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to get agent response'
       setError(errorMsg)
       throw err
     } finally {
@@ -133,6 +177,7 @@ export function useApi() {
     isSpeaking,
     checkHealth,
     sendChat,
+    sendAgentChat,
     speak,
     stopSpeaking,
   }

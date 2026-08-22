@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from 'react'
 import type { ChatMessage, CoachAction, ChecklistItem, CoachState, SessionState } from '@/types'
 import { DEFAULT_CHECKLIST } from '@/types'
 import { resolveActionRoute } from '@/lib/coach-action'
-import { useApi } from './useApi'
+import { type AgentPlanSummary, useApi } from './useApi'
 
 // Storage keys
 const STORAGE_KEYS = {
@@ -45,11 +45,32 @@ interface UseCoachOptions {
   onAddDevice?: (type: string, displayName?: string) => Promise<unknown>
   /** Apply a producer command the coach proposed (issue #53) — 808 / musical moves. */
   onApplyCommand?: (command: string) => Promise<unknown>
+  /** Apply a plan already previewed in the agent conversation. */
+  onApplyPlan?: (command: string, planId: string) => Promise<unknown>
   voiceEnabled?: boolean
 }
 
-export function useCoach({ session, onAddDevice, onApplyCommand, voiceEnabled = false }: UseCoachOptions) {
-  const { sendChat, speak, isSpeaking, stopSpeaking, isLoading: apiLoading } = useApi()
+export function useCoach({ session, onAddDevice, onApplyCommand, onApplyPlan, voiceEnabled = false }: UseCoachOptions) {
+  const { sendAgentChat, speak, isSpeaking, stopSpeaking, isLoading: apiLoading } = useApi()
+
+  const actionFromPlan = (plan: AgentPlanSummary | undefined): CoachAction | undefined => {
+    if (plan === undefined || plan.requiresConfirmation) return undefined
+    const deviceAction = plan.actions.find((action) => action.type === 'create_source')
+    if (plan.intent === 'add_device' && typeof deviceAction?.deviceType === 'string') {
+      return {
+        type: 'add_device',
+        label: `Review ${String(deviceAction.displayName ?? deviceAction.deviceType)}`,
+        description: plan.summary,
+        params: { deviceType: deviceAction.deviceType, displayName: deviceAction.displayName, command: plan.command, planId: plan.planId },
+      }
+    }
+    return {
+      type: 'create_notes',
+      label: 'Review producer plan',
+      description: plan.summary,
+      params: { command: plan.command, planId: plan.planId },
+    }
+  }
 
   // Initialize state from localStorage
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
@@ -99,7 +120,7 @@ export function useCoach({ session, onAddDevice, onApplyCommand, voiceEnabled = 
 
     try {
       // Get AI response about the goal
-      const response = await sendChat(
+      const response = await sendAgentChat(
         [{ role: 'user', content: `My production goal is: ${newGoal}` }],
         newGoal,
         {
@@ -114,7 +135,7 @@ export function useCoach({ session, onAddDevice, onApplyCommand, voiceEnabled = 
         role: 'coach',
         content: response.content,
         timestamp: new Date(),
-        action: response.action,
+        action: response.action ?? actionFromPlan(response.plan),
       }
 
       setMessages(prev => [...prev, coachMessage])
@@ -138,7 +159,7 @@ export function useCoach({ session, onAddDevice, onApplyCommand, voiceEnabled = 
       setIsLoading(false)
       if (!voiceEnabled) setState('idle')
     }
-  }, [sendChat, speak, session, voiceEnabled])
+  }, [sendAgentChat, speak, session, voiceEnabled])
 
   // Send message to coach
   const sendMessage = useCallback(async (content: string) => {
@@ -162,7 +183,7 @@ export function useCoach({ session, onAddDevice, onApplyCommand, voiceEnabled = 
         content: m.content,
       }))
 
-      const response = await sendChat(
+      const response = await sendAgentChat(
         recentMessages,
         goal,
         {
@@ -177,7 +198,7 @@ export function useCoach({ session, onAddDevice, onApplyCommand, voiceEnabled = 
         role: 'coach',
         content: response.content,
         timestamp: new Date(),
-        action: response.action,
+        action: response.action ?? actionFromPlan(response.plan),
       }
 
       setMessages(prev => [...prev, coachMessage])
@@ -201,7 +222,7 @@ export function useCoach({ session, onAddDevice, onApplyCommand, voiceEnabled = 
       setIsLoading(false)
       if (!voiceEnabled || !isSpeaking) setState('idle')
     }
-  }, [messages, goal, session, sendChat, speak, voiceEnabled, isSpeaking])
+  }, [messages, goal, session, sendAgentChat, speak, voiceEnabled, isSpeaking])
 
   // Apply an action — either a device add (#40) or an 808/musical move (#53).
   const applyAction = useCallback(async (action: CoachAction) => {
@@ -209,13 +230,21 @@ export function useCoach({ session, onAddDevice, onApplyCommand, voiceEnabled = 
     if (route.kind === 'none') return
 
     let what: string
+    let outcome: unknown
+    const planId = action.params?.planId
     if (route.kind === 'command') {
-      await onApplyCommand?.(route.command)
+      outcome = typeof planId === 'string' && onApplyPlan !== undefined
+        ? await onApplyPlan(route.command, planId)
+        : await onApplyCommand?.(route.command)
       what = 'that move'
     } else {
-      await onAddDevice?.(route.deviceType, route.displayName)
+      outcome = typeof planId === 'string' && onApplyPlan !== undefined
+        ? await onApplyPlan(String(action.params?.command ?? `add ${route.displayName ?? route.deviceType}`), planId)
+        : await onAddDevice?.(route.deviceType, route.displayName)
       what = route.displayName || route.deviceType
     }
+
+    if (outcome === null || outcome === false) return
 
     // Mark action as applied
     setMessages(prev =>
@@ -238,7 +267,7 @@ export function useCoach({ session, onAddDevice, onApplyCommand, voiceEnabled = 
     if (voiceEnabled) {
       speak(confirmation.content)
     }
-  }, [onAddDevice, onApplyCommand, voiceEnabled, speak])
+  }, [onAddDevice, onApplyCommand, onApplyPlan, voiceEnabled, speak])
 
   // Update checklist item
   const toggleChecklistItem = useCallback((itemId: number) => {

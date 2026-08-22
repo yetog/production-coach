@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Send, Mic, MicOff, Menu, Sparkles, ChevronDown, Zap, Link, RefreshCw } from 'lucide-react'
+import { Send, Mic, MicOff, Menu, Sparkles, ChevronDown, Zap, Link } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { HeroAvatar } from '@/components/HeroAvatar'
 import { Sidebar } from '@/components/Sidebar'
@@ -47,6 +47,7 @@ function App() {
     session,
     onAddDevice: addDevice,
     onApplyCommand: applyCommand,
+    onApplyPlan: (command, planId) => agent.applyPlan(command, planId),
     voiceEnabled: settings.voiceEnabled,
   })
 

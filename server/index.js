@@ -7,6 +7,9 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { parseActionFromResponse } from './lib/parse-action.js';
 import { buildChatRequest, describeProviders, resolveProvider } from './lib/chat-provider.js';
+import { createProviderModel, runDrZayTurn } from './lib/agent-loop.js';
+import { createProducerTools, ProducerToolError } from './lib/producer-tools.js';
+import { createAgentBridgeClient, AgentBridgeError } from './lib/agent-bridge-client.js';
 import {
   CHAT_TIMEOUT_MS,
   TTS_TIMEOUT_MS,
@@ -45,6 +48,7 @@ const PORT = process.env.PORT || 3021;
 // environment at boot - see lib/chat-provider.js for why the request body
 // cannot simply be shared between them.
 const CHAT_PROVIDER = resolveProvider(process.env);
+const AGENT_BRIDGE_URL = process.env.AGENT_BRIDGE_URL || 'http://127.0.0.1:3022/api';
 
 // How many tokens a reply may use. Higher for OpenAI: on gpt-5.x this budget
 // also covers the model's internal reasoning, so the old 300 left very little
@@ -139,6 +143,71 @@ app.get('/api/health', (req, res) => {
       elevenlabs: !!ELEVEN_LABS_API_KEY
     }
   });
+});
+
+/**
+ * Agent chat: Dr. Zay can use typed producer tools. This route is additive to
+ * /api/chat while the clients migrate; it deliberately keeps apply behind the
+ * application's approval callback rather than allowing model text to mutate.
+ */
+app.post('/api/agent/chat', async (req, res) => {
+  try {
+    const { messages, goal, sessionInfo, project } = req.body ?? {};
+    const validated = validateChatMessages(messages);
+    if (!validated.ok) return res.status(validated.status).json({ error: validated.error });
+    if (CHAT_PROVIDER.id === 'none') {
+      return res.status(500).json({ error: CHAT_PROVIDER.reason });
+    }
+
+    let system = DR_ZAY_SYSTEM_PROMPT + `\n\nTOOL POLICY:
+- For a producer change, call plan_change before suggesting Apply.
+- Never claim a change was made from text alone.
+- Do not call apply_plan unless the application has recorded explicit user approval.
+- Ask a clarification question when the plan cannot identify a safe target.`;
+    if (goal) system += `\n\nThe user's current production goal: "${goal}"`;
+    if (sessionInfo) system += `\n\nClient session hint: BPM=${sessionInfo.bpm || '?'}, Key=${sessionInfo.key || '?'}, Devices=${sessionInfo.devices?.length || 0}`;
+
+    const bridge = createAgentBridgeClient({ baseUrl: AGENT_BRIDGE_URL });
+    const tools = createProducerTools({
+      agent: bridge,
+      project,
+      // Approval is intentionally false for this first request. The client
+      // must call the explicit producer apply endpoint after rendering a plan.
+      approveApply: () => false,
+    });
+    const result = await runDrZayTurn({
+      model: createProviderModel(CHAT_PROVIDER),
+      system,
+      messages: validated.messages,
+      tools,
+      maxOutputTokens: MAX_REPLY_TOKENS,
+    });
+
+    const steps = (result.steps || []).map((step) => ({
+      toolCalls: step.toolCalls || [],
+      toolResults: step.toolResults || [],
+      finishReason: step.finishReason,
+    }));
+    const planResult = (result.steps || [])
+      .flatMap((step) => step.toolResults || [])
+      .map((toolResult) => toolResult.output ?? toolResult.result)
+      .find((output) => output && typeof output === 'object' && typeof output.planId === 'string');
+    res.json({
+      content: result.text || "Yo, I need a little more detail before I make a move.",
+      mode: 'agent',
+      model: CHAT_PROVIDER.model,
+      provider: CHAT_PROVIDER.id,
+      plan: planResult,
+      steps,
+    });
+  } catch (error) {
+    const known = error instanceof ProducerToolError || error instanceof AgentBridgeError;
+    console.error('Agent chat error:', error);
+    res.status(known ? (error.status || 409) : 500).json({
+      error: known ? error.message : 'Failed to run Dr. Zay agent',
+      code: known ? error.code : 'agent_error',
+    });
+  }
 });
 
 // Chat completion with IONOS Model Hub
