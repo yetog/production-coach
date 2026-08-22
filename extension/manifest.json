@@ -7,7 +7,7 @@
     "service_worker": "background.js",
     "type": "module"
   },
-  "permissions": ["tabs"],
+  "permissions": ["tabs", "sidePanel"],
   "action": {
     "default_title": "Open Dr. Zay"
   },
@@ -35,7 +35,7 @@
     "http://127.0.0.1/*"
   ],
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'; frame-src https://zaylegend.com http://localhost http://127.0.0.1"
+    "extension_pages": "script-src 'self'; object-src 'self'; frame-src https://zaylegend.com http://localhost:* http://127.0.0.1:*"
   },
   "commands": {
     "toggle-ptt": {
