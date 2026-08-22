@@ -34,7 +34,10 @@ npm --prefix bot run typecheck
 ```
 
 The expected baseline is all tests passing, a successful frontend build, and
-lint warnings limited to the existing warnings documented in CI output.
+lint warnings limited to the existing warnings documented in CI output. Clean
+installs must also pass `npm audit --omit=dev --audit-level=moderate` in both
+the root package and `bot/`; the Nexus SDK's transitive `undici` dependency is
+pinned through package overrides to a patched release.
 
 ## Producer workflow
 
