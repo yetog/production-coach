@@ -96,7 +96,7 @@ export function useApi() {
     setError(null)
 
     try {
-      const res = await fetch(`${API_BASE}/agent/chat`, {
+      const res = await fetch(`${API_BASE}/dr-zay/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages, goal, sessionInfo, project }),

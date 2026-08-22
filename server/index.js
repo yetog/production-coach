@@ -150,7 +150,7 @@ app.get('/api/health', (req, res) => {
  * /api/chat while the clients migrate; it deliberately keeps apply behind the
  * application's approval callback rather than allowing model text to mutate.
  */
-app.post('/api/agent/chat', async (req, res) => {
+app.post('/api/dr-zay/chat', async (req, res) => {
   try {
     const { messages, goal, sessionInfo, project } = req.body ?? {};
     const validated = validateChatMessages(messages);
