@@ -22,7 +22,7 @@ export function createProviderModel(provider) {
   const model = compatible.chatModel(provider.model)
 
   // Expose non-secret diagnostics for tests/health; never attach the key.
-  Object.defineProperty(model, "config", {
+  Object.defineProperty(model, "__drZayConfig", {
     value: { transformRequestBody },
     enumerable: false,
   })

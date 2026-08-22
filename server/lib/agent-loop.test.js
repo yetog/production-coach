@@ -11,7 +11,7 @@ describe("Dr. Zay tool loop", () => {
     })
 
     expect(model.modelId).toBe("gpt-5.4-mini")
-    const transformed = model.config.transformRequestBody({ max_tokens: 300, model: "x" })
+    const transformed = model.__drZayConfig.transformRequestBody({ max_tokens: 300, model: "x" })
     expect(transformed).toEqual({ max_completion_tokens: 300, model: "x" })
   })
 
@@ -23,7 +23,7 @@ describe("Dr. Zay tool loop", () => {
       baseUrl: "https://ionos.example/v1",
     })
 
-    expect(model.config.transformRequestBody({ max_tokens: 300 })).toEqual({ max_tokens: 300 })
+    expect(model.__drZayConfig.transformRequestBody({ max_tokens: 300 })).toEqual({ max_tokens: 300 })
   })
 
   it("passes typed tools into a multi-step model call and returns tool results", async () => {
