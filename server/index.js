@@ -231,7 +231,7 @@ app.post('/api/dr-zay/chat/stream', async (req, res) => {
   const bridge = createAgentBridgeClient({ baseUrl: AGENT_BRIDGE_URL });
   const tools = createProducerTools({ agent: bridge, project, approveApply: () => false });
   const send = (event) => {
-    if (!res.writableEnded) res.write(`data: ${JSON.stringify(event)}\\n\\n`);
+    if (!res.writableEnded) res.write(`data: ${JSON.stringify(event)}\n\n`);
   };
 
   res.status(200).set({
