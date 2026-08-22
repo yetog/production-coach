@@ -3,6 +3,7 @@ import type { ChatMessage, CoachAction, ChecklistItem, CoachState, SessionState 
 import { DEFAULT_CHECKLIST } from '@/types'
 import { resolveActionRoute } from '@/lib/coach-action'
 import { type AgentPlanSummary, useApi } from './useApi'
+import { applyEvent, isActionablePlan, planEvent, undoEvent } from '@/lib/agent-events'
 
 // Storage keys
 const STORAGE_KEYS = {
@@ -48,14 +49,16 @@ interface UseCoachOptions {
   onApplyCommand?: (command: string) => Promise<unknown>
   /** Apply a plan already previewed in the agent conversation. */
   onApplyPlan?: (command: string, planId: string) => Promise<unknown>
+  /** Undo the last verified producer action through the same AgentService. */
+  onUndo?: () => Promise<unknown>
   voiceEnabled?: boolean
 }
 
-export function useCoach({ project, session, onAddDevice, onApplyCommand, onApplyPlan, voiceEnabled = false }: UseCoachOptions) {
+export function useCoach({ project, session, onAddDevice, onApplyCommand, onApplyPlan, onUndo, voiceEnabled = false }: UseCoachOptions) {
   const { sendAgentChat, speak, isSpeaking, stopSpeaking, isLoading: apiLoading } = useApi()
 
   const actionFromPlan = (plan: AgentPlanSummary | undefined): CoachAction | undefined => {
-    if (plan === undefined || plan.requiresConfirmation) return undefined
+    if (!isActionablePlan(plan)) return undefined
     const deviceAction = plan.actions.find((action) => action.type === 'create_source')
     if (plan.intent === 'add_device' && typeof deviceAction?.deviceType === 'string') {
       return {
@@ -138,6 +141,7 @@ export function useCoach({ project, session, onAddDevice, onApplyCommand, onAppl
         content: response.content,
         timestamp: new Date(),
         action: response.action ?? actionFromPlan(response.plan),
+        producerEvent: response.plan ? planEvent(response.plan) : undefined,
       }
 
       setMessages(prev => [...prev, coachMessage])
@@ -202,6 +206,7 @@ export function useCoach({ project, session, onAddDevice, onApplyCommand, onAppl
         content: response.content,
         timestamp: new Date(),
         action: response.action ?? actionFromPlan(response.plan),
+        producerEvent: response.plan ? planEvent(response.plan) : undefined,
       }
 
       setMessages(prev => [...prev, coachMessage])
@@ -249,11 +254,20 @@ export function useCoach({ project, session, onAddDevice, onApplyCommand, onAppl
 
     if (outcome === null || outcome === false) return
 
+    const event = applyEvent(outcome, {
+      planId: typeof planId === 'string' ? planId : undefined,
+      summary: `Added ${what}.`,
+    })
+
     // Mark action as applied
     setMessages(prev =>
       prev.map(msg =>
         msg.action?.label === action.label
-          ? { ...msg, action: { ...msg.action!, applied: true } }
+          ? {
+              ...msg,
+              action: { ...msg.action!, applied: true, params: { ...msg.action?.params, actionId: event.actionId } },
+              producerEvent: event,
+            }
           : msg
       )
     )
@@ -264,6 +278,10 @@ export function useCoach({ project, session, onAddDevice, onApplyCommand, onAppl
       role: 'coach',
       content: `Done! ${what} is now in your session. What's next?`,
       timestamp: new Date(),
+      producerEvent: {
+        ...event,
+        kind: 'verification',
+      },
     }
     setMessages(prev => [...prev, confirmation])
 
@@ -271,6 +289,26 @@ export function useCoach({ project, session, onAddDevice, onApplyCommand, onAppl
       speak(confirmation.content)
     }
   }, [onAddDevice, onApplyCommand, onApplyPlan, voiceEnabled, speak])
+
+  const undoLastAction = useCallback(async (messageId?: string) => {
+    if (onUndo === undefined) return
+    const outcome = await onUndo()
+    if (outcome === null || outcome === false) return
+    const event = undoEvent(outcome)
+    setMessages(prev => prev.map(message => {
+      if (messageId !== undefined && message.id !== messageId) return message
+      if (message.producerEvent?.actionId !== event.actionId) return message
+      const existingEvent = message.producerEvent
+      return { ...message, producerEvent: { ...existingEvent, status: 'undone' as const } as typeof existingEvent }
+    }))
+    setMessages(prev => [...prev, {
+      id: `undo-${Date.now()}`,
+      role: 'coach',
+      content: event.summary ?? 'The last producer change was undone.',
+      timestamp: new Date(),
+      producerEvent: event,
+    }])
+  }, [onUndo])
 
   // Update checklist item
   const toggleChecklistItem = useCallback((itemId: number) => {
@@ -330,6 +368,7 @@ export function useCoach({ project, session, onAddDevice, onApplyCommand, onAppl
     setProductionGoal,
     sendMessage,
     applyAction,
+    undoLastAction,
     toggleChecklistItem,
     clearConversation,
     stopSpeaking,

@@ -40,6 +40,7 @@ function App() {
     setProductionGoal,
     sendMessage,
     applyAction,
+    undoLastAction,
     toggleChecklistItem,
     clearConversation,
     stopSpeaking,
@@ -49,6 +50,7 @@ function App() {
     onAddDevice: addDevice,
     onApplyCommand: applyCommand,
     onApplyPlan: (command, planId) => agent.applyPlan(command, planId),
+    onUndo: agent.undoLast,
     voiceEnabled: settings.voiceEnabled,
   })
 
@@ -291,6 +293,7 @@ function App() {
                 key={message.id}
                 message={message}
                 onApplyAction={applyAction}
+                onUndo={() => undoLastAction(message.id)}
                 index={index}
               />
             ))}
@@ -407,10 +410,12 @@ function App() {
 function MessageBubble({
   message,
   onApplyAction,
+  onUndo,
   index,
 }: {
   message: ChatMessage
   onApplyAction?: (action: CoachAction) => void
+  onUndo?: () => void
   index: number
 }) {
   const isCoach = message.role === 'coach'
@@ -466,12 +471,41 @@ function MessageBubble({
         )}
 
         {message.action?.applied && (
-          <span className="inline-flex items-center gap-1.5 text-xs text-green-400">
-            <span className="w-4 h-4 rounded-full bg-green-500/20 flex items-center justify-center">
-              <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+          <div className="flex flex-wrap items-center gap-3">
+            <span className={cn(
+              'inline-flex items-center gap-1.5 text-xs',
+              message.producerEvent?.status === 'undone' ? 'text-muted-foreground' : 'text-green-400',
+            )}>
+              <span className="w-4 h-4 rounded-full bg-green-500/20 flex items-center justify-center">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+              </span>
+              {message.producerEvent?.status === 'undone' ? 'Undone' : 'Applied and verified'}
             </span>
-            Applied
-          </span>
+            {message.producerEvent?.status !== 'undone' && message.producerEvent?.actionId && (
+              <button
+                type="button"
+                onClick={onUndo}
+                className="text-xs text-cyan-400 hover:text-cyan-300 underline underline-offset-2"
+              >
+                Undo
+              </button>
+            )}
+          </div>
+        )}
+
+        {message.producerEvent && (message.producerEvent.kind === 'plan' || message.producerEvent.kind === 'clarification') && (
+          <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 px-3 py-2 text-xs text-muted-foreground">
+            <div className="font-medium text-cyan-300">
+              {message.producerEvent.kind === 'clarification' ? 'Needs your answer' : 'Producer plan preview'}
+            </div>
+            {message.producerEvent.target && (
+              <div>Bars {message.producerEvent.target.startBar}–{message.producerEvent.target.endBar}
+                {message.producerEvent.target.section ? ` · ${message.producerEvent.target.section}` : ''}</div>
+            )}
+            {message.producerEvent.actions && message.producerEvent.actions.length > 0 && (
+              <div>{message.producerEvent.actions.length} planned action{message.producerEvent.actions.length === 1 ? '' : 's'} · Plan {message.producerEvent.planId}</div>
+            )}
+          </div>
         )}
       </div>
     </div>
