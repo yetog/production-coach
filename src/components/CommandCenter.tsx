@@ -1,4 +1,4 @@
-import { useCallback, useReducer, useState } from 'react'
+import { useCallback, useEffect, useReducer, useState } from 'react'
 import {
   commandCenterReducer,
   initialCommandState,
@@ -32,6 +32,34 @@ type Agent = ReturnType<typeof useNexus>
 export function CommandCenter({ agent }: { agent: Agent }) {
   const [state, dispatch] = useReducer(commandCenterReducer, initialCommandState)
   const [input, setInput] = useState('')
+
+  // Chat and Command Center use one useNexus instance. Reflect chat-created
+  // plans and outcomes here so the two surfaces cannot show contradictory
+  // producer state during migration.
+  useEffect(() => {
+    if (agent.sharedPlan !== undefined && state.plan?.planId !== agent.sharedPlan.planId) {
+      dispatch({ type: 'planned', plan: agent.sharedPlan })
+    }
+  }, [agent.sharedPlan, state.plan?.planId])
+
+  useEffect(() => {
+    if (
+      agent.sharedOutcome !== null &&
+      state.result?.action.actionId !== agent.sharedOutcome.action.actionId
+    ) {
+      dispatch({ type: 'applied', outcome: agent.sharedOutcome })
+    }
+  }, [agent.sharedOutcome, state.result?.action.actionId])
+
+  useEffect(() => {
+    if (
+      agent.sharedUndo !== null &&
+      state.lastActionId === agent.sharedUndo.actionId &&
+      state.canUndo
+    ) {
+      dispatch({ type: 'undone', summary: agent.sharedUndo.summary })
+    }
+  }, [agent.sharedUndo, state.canUndo, state.lastActionId])
 
   const onPlan = useCallback(
     async (command: string) => {

@@ -82,6 +82,16 @@ describe("planning", () => {
 
     expect(state.canApply).toBe(false)
   })
+
+  it("treats confirmation-required plans with actions as reviewable", () => {
+    const state = run([
+      { type: "planning", command: "x" },
+      { type: "planned", plan: plan({ requiresConfirmation: true }) },
+    ])
+
+    expect(state.status).toBe("reviewing")
+    expect(state.canApply).toBe(true)
+  })
 })
 
 describe("applying", () => {

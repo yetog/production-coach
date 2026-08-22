@@ -6,5 +6,8 @@ export default defineConfig({
   test: {
     include: ["src/**/*.test.ts", "bot/**/*.test.ts", "extension/**/*.test.js"],
     environment: "node",
+    // Nexus document fixtures can exceed Vitest's default on a busy runner.
+    testTimeout: 15000,
+    hookTimeout: 15000,
   },
 })

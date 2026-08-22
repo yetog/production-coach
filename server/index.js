@@ -7,6 +7,9 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { parseActionFromResponse } from './lib/parse-action.js';
 import { buildChatRequest, describeProviders, resolveProvider } from './lib/chat-provider.js';
+import { createProviderModel, runDrZayTurn, streamDrZayTurn } from './lib/agent-loop.js';
+import { createProducerTools, ProducerToolError } from './lib/producer-tools.js';
+import { createAgentBridgeClient, AgentBridgeError } from './lib/agent-bridge-client.js';
 import {
   CHAT_TIMEOUT_MS,
   TTS_TIMEOUT_MS,
@@ -45,6 +48,7 @@ const PORT = process.env.PORT || 3021;
 // environment at boot - see lib/chat-provider.js for why the request body
 // cannot simply be shared between them.
 const CHAT_PROVIDER = resolveProvider(process.env);
+const AGENT_BRIDGE_URL = process.env.AGENT_BRIDGE_URL || 'http://127.0.0.1:3022/api';
 
 // How many tokens a reply may use. Higher for OpenAI: on gpt-5.x this budget
 // also covers the model's internal reasoning, so the old 300 left very little
@@ -141,9 +145,149 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+/**
+ * Agent chat: Dr. Zay can use typed producer tools. This route is additive to
+ * /api/chat while the clients migrate; it deliberately keeps apply behind the
+ * application's approval callback rather than allowing model text to mutate.
+ */
+app.post('/api/dr-zay/chat', async (req, res) => {
+  try {
+    const { messages, goal, sessionInfo, project } = req.body ?? {};
+    const validated = validateChatMessages(messages);
+    if (!validated.ok) return res.status(validated.status).json({ error: validated.error });
+    if (CHAT_PROVIDER.id === 'none') {
+      return res.status(500).json({ error: CHAT_PROVIDER.reason });
+    }
+
+    let system = DR_ZAY_SYSTEM_PROMPT + `\n\nTOOL POLICY:
+- For a producer change, call plan_change before suggesting Apply.
+- Never claim a change was made from text alone.
+- Do not call apply_plan unless the application has recorded explicit user approval.
+- Ask a clarification question when the plan cannot identify a safe target.`;
+    if (goal) system += `\n\nThe user's current production goal: "${goal}"`;
+    if (sessionInfo) system += `\n\nClient session hint: BPM=${sessionInfo.bpm || '?'}, Key=${sessionInfo.key || '?'}, Devices=${sessionInfo.devices?.length || 0}`;
+
+    const bridge = createAgentBridgeClient({ baseUrl: AGENT_BRIDGE_URL });
+    const tools = createProducerTools({
+      agent: bridge,
+      project,
+      // Approval is intentionally false for this first request. The client
+      // must call the explicit producer apply endpoint after rendering a plan.
+      approveApply: () => false,
+    });
+    const result = await runDrZayTurn({
+      model: createProviderModel(CHAT_PROVIDER),
+      system,
+      messages: validated.messages,
+      tools,
+      maxOutputTokens: MAX_REPLY_TOKENS,
+    });
+
+    const steps = (result.steps || []).map((step) => ({
+      toolCalls: step.toolCalls || [],
+      toolResults: step.toolResults || [],
+      finishReason: step.finishReason,
+    }));
+    const planResult = (result.steps || [])
+      .flatMap((step) => step.toolResults || [])
+      .map((toolResult) => toolResult.output ?? toolResult.result)
+      .find((output) => output && typeof output === 'object' && typeof output.planId === 'string');
+    res.json({
+      content: result.text || "Yo, I need a little more detail before I make a move.",
+      mode: 'agent',
+      model: CHAT_PROVIDER.model,
+      provider: CHAT_PROVIDER.id,
+      plan: planResult,
+      steps,
+    });
+  } catch (error) {
+    const known = error instanceof ProducerToolError || error instanceof AgentBridgeError;
+    console.error('Agent chat error:', error);
+    res.status(known ? (error.status || 409) : 500).json({
+      error: known ? error.message : 'Failed to run Dr. Zay agent',
+      code: known ? error.code : 'agent_error',
+    });
+  }
+});
+
+/** SSE transport for the same tool loop. Data events are intentionally small
+ * and JSON-shaped so the web app and extension can share the parser. */
+app.post('/api/dr-zay/chat/stream', async (req, res) => {
+  const { messages, goal, sessionInfo, project } = req.body ?? {};
+  const validated = validateChatMessages(messages);
+  if (!validated.ok) return res.status(validated.status).json({ error: validated.error });
+  if (CHAT_PROVIDER.id === 'none') {
+    return res.status(500).json({ error: CHAT_PROVIDER.reason });
+  }
+
+  let system = DR_ZAY_SYSTEM_PROMPT + `\n\nTOOL POLICY:
+- For a producer change, call plan_change before suggesting Apply.
+- Never claim a change was made from text alone.
+- Do not call apply_plan unless the application has recorded explicit user approval.
+- Ask a clarification question when the plan cannot identify a safe target.`;
+  if (goal) system += `\n\nThe user's current production goal: "${goal}"`;
+  if (sessionInfo) system += `\n\nClient session hint: BPM=${sessionInfo.bpm || '?'}, Key=${sessionInfo.key || '?'}, Devices=${sessionInfo.devices?.length || 0}`;
+
+  const bridge = createAgentBridgeClient({ baseUrl: AGENT_BRIDGE_URL });
+  const tools = createProducerTools({ agent: bridge, project, approveApply: () => false });
+  const send = (event) => {
+    if (!res.writableEnded) res.write(`data: ${JSON.stringify(event)}\n\n`);
+  };
+
+  res.status(200).set({
+    'Content-Type': 'text/event-stream; charset=utf-8',
+    'Cache-Control': 'no-cache, no-transform',
+    Connection: 'keep-alive',
+  });
+
+  let content = '';
+  let plan;
+  try {
+    const result = streamDrZayTurn({
+      model: createProviderModel(CHAT_PROVIDER),
+      system,
+      messages: validated.messages,
+      tools,
+      maxOutputTokens: MAX_REPLY_TOKENS,
+    });
+    for await (const part of result.fullStream) {
+      if (part.type === 'text-delta') {
+        content += part.text;
+        send({ type: 'text_delta', text: part.text });
+      } else if (part.type === 'tool-call') {
+        send({ type: 'tool_call', toolName: part.toolName, input: part.input, toolCallId: part.toolCallId });
+      } else if (part.type === 'tool-result') {
+        const output = part.output;
+        if (output && typeof output === 'object' && typeof output.planId === 'string') plan = output;
+        send({ type: 'tool_result', toolName: part.toolName, output: part.output, toolCallId: part.toolCallId });
+      } else if (part.type === 'tool-error' || part.type === 'tool-output-denied') {
+        send({ type: 'tool_error', toolName: part.toolName, error: String(part.error ?? part.reason ?? 'Tool call denied') });
+      }
+    }
+    send({
+      type: 'done',
+      content: content || "Yo, I need a little more detail before I make a move.",
+      mode: 'agent',
+      model: CHAT_PROVIDER.model,
+      provider: CHAT_PROVIDER.id,
+      plan,
+    });
+  } catch (error) {
+    console.error('Agent chat stream error:', error);
+    send({ type: 'error', code: error.code ?? 'agent_error', error: error.message ?? 'Failed to run Dr. Zay agent' });
+  } finally {
+    res.end();
+  }
+});
+
 // Chat completion with IONOS Model Hub
 app.post('/api/chat', async (req, res) => {
   try {
+    // Kept temporarily for older clients, but explicitly deprecated now that
+    // the web and extension clients use the typed Dr. Zay route. This prevents
+    // new clients from accidentally reviving the prose → regex boundary.
+    res.set('Deprecation', 'true')
+    res.set('Link', '</api/dr-zay/chat/stream>; rel="successor-version"')
     const { messages, goal, sessionInfo } = req.body ?? {};
 
     // Validate before anything else. A malformed request is a client error

@@ -8,6 +8,30 @@ export interface ChatMessage {
   content: string
   timestamp: Date
   action?: CoachAction
+  producerEvent?: ProducerEvent
+}
+
+/** Shared, serializable lifecycle state rendered by web and extension clients. */
+export type ProducerEventKind =
+  | 'request'
+  | 'plan'
+  | 'clarification'
+  | 'apply_outcome'
+  | 'verification'
+  | 'undo'
+  | 'failure'
+
+export interface ProducerEvent {
+  kind: ProducerEventKind
+  command?: string
+  planId?: string
+  actionId?: string
+  summary?: string
+  target?: { section?: string; startBar: number; endBar: number; confidence: number }
+  actions?: Array<Record<string, unknown>>
+  status?: 'pending' | 'applied' | 'verified' | 'failed' | 'undone'
+  verification?: { ok: boolean; checked: number; failures: string[] }
+  error?: string
 }
 
 // Coach Actions (things the coach can do via NEXUS)

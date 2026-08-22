@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { PTT_EVENT, togglePtt } from '@/lib/ptt-bridge'
+import { PTT_EVENT, isExtensionMessage, togglePtt } from '@/lib/ptt-bridge'
 
 interface UseExtensionPttOptions {
   /** Current mic state, so a toggle knows which way to flip. */
@@ -44,6 +44,13 @@ export function useExtensionPtt({
     }
 
     window.addEventListener(PTT_EVENT, handler)
-    return () => window.removeEventListener(PTT_EVENT, handler)
+    const messageHandler = (event: MessageEvent) => {
+      if (isExtensionMessage(event.data)) handler()
+    }
+    window.addEventListener('message', messageHandler)
+    return () => {
+      window.removeEventListener(PTT_EVENT, handler)
+      window.removeEventListener('message', messageHandler)
+    }
   }, [enabled])
 }

@@ -1,8 +1,9 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import type { ChatMessage, CoachAction, ChecklistItem, CoachState, SessionState } from '@/types'
 import { DEFAULT_CHECKLIST } from '@/types'
 import { resolveActionRoute } from '@/lib/coach-action'
-import { useApi } from './useApi'
+import { type AgentPlanSummary, useApi } from './useApi'
+import { applyEvent, isActionablePlan, planEvent, undoEvent } from '@/lib/agent-events'
 
 // Storage keys
 const STORAGE_KEYS = {
@@ -41,15 +42,46 @@ function saveToStorage<T>(key: string, value: T): void {
 }
 
 interface UseCoachOptions {
+  project?: string
   session: SessionState
   onAddDevice?: (type: string, displayName?: string) => Promise<unknown>
   /** Apply a producer command the coach proposed (issue #53) — 808 / musical moves. */
   onApplyCommand?: (command: string) => Promise<unknown>
+  /** Apply a plan already previewed in the agent conversation. */
+  onApplyPlan?: (command: string, planId: string) => Promise<unknown>
+  /** Undo the last verified producer action through the same AgentService. */
+  onUndo?: (actionId?: string) => Promise<unknown>
+  /** Publish a typed chat plan to other producer clients in the same session. */
+  onPlan?: (plan: AgentPlanSummary) => void
+  /** Re-plan a persisted pending request against current Audiotool state. */
+  onRehydratePlan?: (command: string) => Promise<AgentPlanSummary | null>
   voiceEnabled?: boolean
 }
 
-export function useCoach({ session, onAddDevice, onApplyCommand, voiceEnabled = false }: UseCoachOptions) {
-  const { sendChat, speak, isSpeaking, stopSpeaking, isLoading: apiLoading } = useApi()
+export function useCoach({ project, session, onAddDevice, onApplyCommand, onApplyPlan, onUndo, onPlan, onRehydratePlan, voiceEnabled = false }: UseCoachOptions) {
+  const { sendAgentChat, speak, isSpeaking, stopSpeaking, isLoading: apiLoading } = useApi()
+  const rehydrateCallback = useRef(onRehydratePlan)
+  const rehydratedMessages = useRef(new Set<string>())
+  rehydrateCallback.current = onRehydratePlan
+
+  const actionFromPlan = (plan: AgentPlanSummary | undefined): CoachAction | undefined => {
+    if (!isActionablePlan(plan)) return undefined
+    const deviceAction = plan.actions.find((action) => action.type === 'create_source')
+    if (plan.intent === 'add_device' && typeof deviceAction?.deviceType === 'string') {
+      return {
+        type: 'add_device',
+        label: `Review ${String(deviceAction.displayName ?? deviceAction.deviceType)}`,
+        description: plan.summary,
+        params: { deviceType: deviceAction.deviceType, displayName: deviceAction.displayName, command: plan.command, planId: plan.planId },
+      }
+    }
+    return {
+      type: 'create_notes',
+      label: 'Review producer plan',
+      description: plan.summary,
+      params: { command: plan.command, planId: plan.planId },
+    }
+  }
 
   // Initialize state from localStorage
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
@@ -91,6 +123,41 @@ export function useCoach({ session, onAddDevice, onApplyCommand, voiceEnabled = 
     saveToStorage(STORAGE_KEYS.goal, goal)
   }, [goal])
 
+  // A plan id is a snapshot of current project state. Re-plan persisted
+  // pending requests after reconnect so Apply can only use a fresh id.
+  useEffect(() => {
+    if (!project || rehydrateCallback.current === undefined) return
+    for (const message of messages) {
+      const event = message.producerEvent
+      if (
+        event === undefined ||
+        (event.kind !== 'plan' && event.kind !== 'clarification') ||
+        typeof event.command !== 'string'
+      ) continue
+      const key = `${project}:${message.id}`
+      if (rehydratedMessages.current.has(key)) continue
+      rehydratedMessages.current.add(key)
+      void rehydrateCallback.current(event.command).then((plan) => {
+        if (plan === null) return
+        const refreshedEvent = planEvent(plan)
+        setMessages((previous) => previous.map((candidate) => {
+          if (candidate.id !== message.id) return candidate
+          const refreshedAction = actionFromPlan(plan)
+          return {
+            ...candidate,
+            producerEvent: refreshedEvent,
+            action: candidate.action?.applied
+              ? { ...candidate.action, params: { ...candidate.action.params, command: plan.command, planId: plan.planId } }
+              : refreshedAction,
+          }
+        }))
+      }).catch(() => {
+        // Keep the persisted preview visible; Apply will surface the bridge
+        // error rather than silently claiming the old plan is current.
+      })
+    }
+  }, [messages, project])
+
   // Set production goal
   const setProductionGoal = useCallback(async (newGoal: string) => {
     setGoal(newGoal)
@@ -99,14 +166,15 @@ export function useCoach({ session, onAddDevice, onApplyCommand, voiceEnabled = 
 
     try {
       // Get AI response about the goal
-      const response = await sendChat(
+      const response = await sendAgentChat(
         [{ role: 'user', content: `My production goal is: ${newGoal}` }],
         newGoal,
         {
           bpm: session.bpm ?? undefined,
           key: session.key ?? undefined,
           devices: session.devices,
-        }
+        },
+        project,
       )
 
       const coachMessage: ChatMessage = {
@@ -114,8 +182,11 @@ export function useCoach({ session, onAddDevice, onApplyCommand, voiceEnabled = 
         role: 'coach',
         content: response.content,
         timestamp: new Date(),
-        action: response.action,
+        action: response.action ?? actionFromPlan(response.plan),
+        producerEvent: response.plan ? planEvent(response.plan) : undefined,
       }
+
+      if (response.plan !== undefined) onPlan?.(response.plan)
 
       setMessages(prev => [...prev, coachMessage])
 
@@ -138,7 +209,7 @@ export function useCoach({ session, onAddDevice, onApplyCommand, voiceEnabled = 
       setIsLoading(false)
       if (!voiceEnabled) setState('idle')
     }
-  }, [sendChat, speak, session, voiceEnabled])
+  }, [onPlan, project, sendAgentChat, speak, session, voiceEnabled])
 
   // Send message to coach
   const sendMessage = useCallback(async (content: string) => {
@@ -162,14 +233,15 @@ export function useCoach({ session, onAddDevice, onApplyCommand, voiceEnabled = 
         content: m.content,
       }))
 
-      const response = await sendChat(
+      const response = await sendAgentChat(
         recentMessages,
         goal,
         {
           bpm: session.bpm ?? undefined,
           key: session.key ?? undefined,
           devices: session.devices,
-        }
+        },
+        project,
       )
 
       const coachMessage: ChatMessage = {
@@ -177,8 +249,11 @@ export function useCoach({ session, onAddDevice, onApplyCommand, voiceEnabled = 
         role: 'coach',
         content: response.content,
         timestamp: new Date(),
-        action: response.action,
+        action: response.action ?? actionFromPlan(response.plan),
+        producerEvent: response.plan ? planEvent(response.plan) : undefined,
       }
+
+      if (response.plan !== undefined) onPlan?.(response.plan)
 
       setMessages(prev => [...prev, coachMessage])
 
@@ -201,7 +276,7 @@ export function useCoach({ session, onAddDevice, onApplyCommand, voiceEnabled = 
       setIsLoading(false)
       if (!voiceEnabled || !isSpeaking) setState('idle')
     }
-  }, [messages, goal, session, sendChat, speak, voiceEnabled, isSpeaking])
+  }, [messages, goal, onPlan, project, session, sendAgentChat, speak, voiceEnabled, isSpeaking])
 
   // Apply an action — either a device add (#40) or an 808/musical move (#53).
   const applyAction = useCallback(async (action: CoachAction) => {
@@ -209,36 +284,85 @@ export function useCoach({ session, onAddDevice, onApplyCommand, voiceEnabled = 
     if (route.kind === 'none') return
 
     let what: string
+    let outcome: unknown
+    const planId = action.params?.planId
     if (route.kind === 'command') {
-      await onApplyCommand?.(route.command)
+      outcome = typeof planId === 'string' && onApplyPlan !== undefined
+        ? await onApplyPlan(route.command, planId)
+        : await onApplyCommand?.(route.command)
       what = 'that move'
     } else {
-      await onAddDevice?.(route.deviceType, route.displayName)
+      outcome = typeof planId === 'string' && onApplyPlan !== undefined
+        ? await onApplyPlan(String(action.params?.command ?? `add ${route.displayName ?? route.deviceType}`), planId)
+        : await onAddDevice?.(route.deviceType, route.displayName)
       what = route.displayName || route.deviceType
     }
+
+    if (outcome === null || outcome === false) return
+
+    const event = applyEvent(outcome, {
+      planId: typeof planId === 'string' ? planId : undefined,
+      summary: `Added ${what}.`,
+    })
 
     // Mark action as applied
     setMessages(prev =>
       prev.map(msg =>
         msg.action?.label === action.label
-          ? { ...msg, action: { ...msg.action!, applied: true } }
+          ? {
+              ...msg,
+              action: { ...msg.action!, applied: true, params: { ...msg.action?.params, actionId: event.actionId } },
+              producerEvent: event,
+            }
           : msg
       )
     )
 
     // Add confirmation
+    const verified = event.status === 'verified'
     const confirmation: ChatMessage = {
       id: `confirm-${Date.now()}`,
       role: 'coach',
-      content: `Done! ${what} is now in your session. What's next?`,
+      content: verified
+        ? `Done! ${what} is now in your session and verified. What's next?`
+        : event.status === 'failed'
+          ? `I applied ${what}, but verification failed: ${event.verification?.failures?.join('; ') || 'the result could not be confirmed'}. Please inspect the session before continuing.`
+          : `I applied ${what}, but the bridge did not return verification. Please inspect the session before continuing.`,
       timestamp: new Date(),
+      producerEvent: {
+        ...event,
+        kind: verified ? 'verification' : 'failure',
+      },
     }
     setMessages(prev => [...prev, confirmation])
 
     if (voiceEnabled) {
       speak(confirmation.content)
     }
-  }, [onAddDevice, onApplyCommand, voiceEnabled, speak])
+  }, [onAddDevice, onApplyCommand, onApplyPlan, voiceEnabled, speak])
+
+  const undoLastAction = useCallback(async (messageId?: string) => {
+    if (onUndo === undefined) return
+    const targetActionId = messageId === undefined
+      ? undefined
+      : messages.find((message) => message.id === messageId)?.producerEvent?.actionId
+    const outcome = await onUndo(targetActionId)
+    if (outcome === null || outcome === false) return
+    const event = undoEvent(outcome)
+    setMessages(prev => prev.map(message => {
+      if (messageId !== undefined && message.id !== messageId) return message
+      if (message.producerEvent?.actionId !== event.actionId) return message
+      const existingEvent = message.producerEvent
+      return { ...message, producerEvent: { ...existingEvent, status: 'undone' as const } as typeof existingEvent }
+    }))
+    setMessages(prev => [...prev, {
+      id: `undo-${Date.now()}`,
+      role: 'coach',
+      content: event.summary ?? 'The last producer change was undone.',
+      timestamp: new Date(),
+      producerEvent: event,
+    }])
+  }, [messages, onUndo])
 
   // Update checklist item
   const toggleChecklistItem = useCallback((itemId: number) => {
@@ -298,6 +422,7 @@ export function useCoach({ session, onAddDevice, onApplyCommand, voiceEnabled = 
     setProductionGoal,
     sendMessage,
     applyAction,
+    undoLastAction,
     toggleChecklistItem,
     clearConversation,
     stopSpeaking,

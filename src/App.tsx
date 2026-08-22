@@ -1,12 +1,11 @@
 import { useState, useRef, useEffect } from 'react'
-import { Send, Mic, MicOff, Menu, Sparkles, ChevronDown, Zap, Link, RefreshCw } from 'lucide-react'
+import { Send, Mic, MicOff, Menu, Sparkles, ChevronDown, Zap, Link } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { HeroAvatar } from '@/components/HeroAvatar'
 import { Sidebar } from '@/components/Sidebar'
 import { GoalBanner } from '@/components/GoalBanner'
 import { QuickPrompts } from '@/components/QuickPrompts'
 import { MiniChecklist } from '@/components/MiniChecklist'
-import { CommandCenter } from '@/components/CommandCenter'
 import { useNexus } from '@/hooks/useNexus'
 import { useCoach } from '@/hooks/useCoach'
 import { useVoice } from '@/hooks/useVoice'
@@ -18,8 +17,8 @@ import type { ChatMessage, CoachAction, CoachSettings } from '@/types'
 const DR_ZAY_AVATAR = 'https://s3.us-central-1.ionoscloud.com/audiotools/A9A7709C-5201-44A5-9BFA-B8AD30BD6544.png'
 
 function App() {
-  // The whole agent surface, not just session/addDevice: CommandCenter needs
-  // plan/apply/undo to drive real DAW edits (#24).
+  // Dr. Zay is the single producer surface. Chat cards use this shared agent
+  // instance for plan/apply/verify/undo against the real DAW.
   const agent = useNexus()
   const { session, addDevice, applyCommand, projectUrl, setProjectUrl, refreshDevices, error: agentError } = agent
   const [projectInput, setProjectInput] = useState(projectUrl)
@@ -40,13 +39,19 @@ function App() {
     setProductionGoal,
     sendMessage,
     applyAction,
+    undoLastAction,
     toggleChecklistItem,
     clearConversation,
     stopSpeaking,
   } = useCoach({
+    project: projectUrl,
     session,
     onAddDevice: addDevice,
     onApplyCommand: applyCommand,
+    onApplyPlan: (command, planId) => agent.applyPlan(command, planId),
+    onUndo: agent.undoLast,
+    onPlan: agent.recordPlan,
+    onRehydratePlan: agent.planCommand,
     voiceEnabled: settings.voiceEnabled,
   })
 
@@ -235,12 +240,6 @@ function App() {
           )}
         </header>
 
-        {/* Producer command centre (#24): plan -> review -> apply -> undo
-            against the real project, via the local agent bridge. */}
-        <div className="flex-shrink-0 px-4 pb-3">
-          <CommandCenter agent={agent} />
-        </div>
-
         {/* Scrollable content area */}
         <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
           {/* Goal input (shown initially) */}
@@ -289,6 +288,7 @@ function App() {
                 key={message.id}
                 message={message}
                 onApplyAction={applyAction}
+                onUndo={() => undoLastAction(message.id)}
                 index={index}
               />
             ))}
@@ -405,10 +405,12 @@ function App() {
 function MessageBubble({
   message,
   onApplyAction,
+  onUndo,
   index,
 }: {
   message: ChatMessage
   onApplyAction?: (action: CoachAction) => void
+  onUndo?: () => void
   index: number
 }) {
   const isCoach = message.role === 'coach'
@@ -464,12 +466,51 @@ function MessageBubble({
         )}
 
         {message.action?.applied && (
-          <span className="inline-flex items-center gap-1.5 text-xs text-green-400">
-            <span className="w-4 h-4 rounded-full bg-green-500/20 flex items-center justify-center">
-              <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+          <div className="flex flex-wrap items-center gap-3">
+            <span className={cn(
+              'inline-flex items-center gap-1.5 text-xs',
+              message.producerEvent?.status === 'undone'
+                ? 'text-muted-foreground'
+                : message.producerEvent?.status === 'verified'
+                  ? 'text-green-400'
+                  : 'text-yellow-400',
+            )}>
+              <span className="w-4 h-4 rounded-full bg-current/20 flex items-center justify-center">
+                <span className="w-1.5 h-1.5 rounded-full bg-current" />
+              </span>
+              {message.producerEvent?.status === 'undone'
+                ? 'Undone'
+                : message.producerEvent?.status === 'verified'
+                  ? 'Applied and verified'
+                  : message.producerEvent?.status === 'failed'
+                    ? 'Applied; verification failed'
+                    : 'Applied; verification pending'}
             </span>
-            Applied
-          </span>
+            {message.producerEvent?.status !== 'undone' && message.producerEvent?.actionId && (
+              <button
+                type="button"
+                onClick={onUndo}
+                className="text-xs text-cyan-400 hover:text-cyan-300 underline underline-offset-2"
+              >
+                Undo
+              </button>
+            )}
+          </div>
+        )}
+
+        {message.producerEvent && (message.producerEvent.kind === 'plan' || message.producerEvent.kind === 'clarification') && (
+          <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 px-3 py-2 text-xs text-muted-foreground">
+            <div className="font-medium text-cyan-300">
+              {message.producerEvent.kind === 'clarification' ? 'Needs your answer' : 'Producer plan preview'}
+            </div>
+            {message.producerEvent.target && (
+              <div>Bars {message.producerEvent.target.startBar}–{message.producerEvent.target.endBar}
+                {message.producerEvent.target.section ? ` · ${message.producerEvent.target.section}` : ''}</div>
+            )}
+            {message.producerEvent.actions && message.producerEvent.actions.length > 0 && (
+              <div>{message.producerEvent.actions.length} planned action{message.producerEvent.actions.length === 1 ? '' : 's'} · Plan {message.producerEvent.planId}</div>
+            )}
+          </div>
         )}
       </div>
     </div>

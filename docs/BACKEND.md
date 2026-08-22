@@ -113,9 +113,9 @@ These should update in real-time as the Audiotool session changes.
 
 ## How Frontend Calls Backend
 
-**Chat Request:**
+**Typed Dr. Zay Request (primary):**
 ```typescript
-POST /api/chat
+POST /api/dr-zay/chat/stream
 {
   "messages": [
     { "role": "user", "content": "How do I add bass?" },
@@ -129,6 +129,12 @@ POST /api/chat
   }
 }
 ```
+
+The response is an SSE stream containing typed tool-call/result events and a
+terminal `done` event with the reviewable plan. Applying remains a separate
+explicit bridge request. The older `POST /api/chat` endpoint remains only for
+legacy clients and is marked with `Deprecation: true`; it must not be used for
+producer actions because it retains the prose parser.
 
 **Chat Response:**
 ```typescript

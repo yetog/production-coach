@@ -70,7 +70,10 @@ export function commandCenterReducer(state: CommandState, action: CommandAction)
       const { plan } = action
       // Two independent reasons a plan is not applyable, checked separately:
       // the agent said so, or it produced nothing to do. Either is enough.
-      const applyable = !plan.requiresConfirmation && plan.actions.length > 0
+      // `requiresConfirmation` means the UI must ask the user before apply;
+      // it does not mean the plan is unresolved. A clarification is what
+      // blocks review, while a plan with actions should render Apply.
+      const applyable = plan.clarification === undefined && plan.actions.length > 0
       return {
         ...state,
         status: applyable ? "reviewing" : "needs_answer",
