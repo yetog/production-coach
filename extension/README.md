@@ -44,6 +44,13 @@ installed nothing dispatches the event and the app is unaffected.
    Ctrl+Shift+Y). Chrome will not let two extensions share a chord — rebind if
    it's taken.
 
+The unpacked QA extension targets the local Vite Dr. Zay app at
+`http://localhost:5174/production-coach/`. The hosted `zaylegend.com` app
+currently sends `X-Frame-Options: SAMEORIGIN`, so it cannot be embedded in a
+Chrome side panel until its frame policy is updated. A production package must
+point `APP_URL` in `sidepanel.js` at a deployment that explicitly allows
+framing from the extension origin.
+
 The extension targets Audiotool plus the Dr. Zay app origins. It requests only
 the `tabs` permission needed to read the active tab's project query parameter;
 it never reads page content. To point it
