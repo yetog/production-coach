@@ -1,4 +1,4 @@
-import { generateText, stepCountIs } from "ai"
+import { generateText, stepCountIs, streamText } from "ai"
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible"
 
 /**
@@ -43,6 +43,25 @@ export async function runDrZayTurn({
   generate = generateText,
 }) {
   return await generate({
+    model,
+    system,
+    messages,
+    tools,
+    stopWhen: stepCountIs(maxSteps),
+    maxOutputTokens,
+  })
+}
+
+/** Streaming counterpart used by web and extension clients. */
+export function streamDrZayTurn({
+  model,
+  messages,
+  tools,
+  system,
+  maxSteps = 5,
+  maxOutputTokens = 800,
+}) {
+  return streamText({
     model,
     system,
     messages,
