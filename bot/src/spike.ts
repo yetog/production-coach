@@ -29,6 +29,9 @@ interface Check {
 }
 
 const checks: Check[] = []
+// Offline event dispatch is a smoke benchmark, not the network-latency gate.
+// CI hosts vary; the live network budget is measured by spike-live.ts.
+const LOCAL_LATENCY_BUDGET_MS = Number(process.env.LOCAL_LATENCY_BUDGET_MS ?? 300)
 function check(name: string, pass: boolean, detail: string): void {
   checks.push({ name, pass, detail })
   console.log(`${pass ? "PASS" : "FAIL"}  ${name} - ${detail}`)
@@ -134,8 +137,8 @@ async function main(): Promise<void> {
   const max = Math.max(...latenciesMs)
   check(
     "local event dispatch latency",
-    max < 150,
-    `max ${max.toFixed(2)}ms over ${latenciesMs.length} events (budget 150-300ms is for network)`,
+    max < LOCAL_LATENCY_BUDGET_MS,
+    `max ${max.toFixed(2)}ms over ${latenciesMs.length} events (local budget ${LOCAL_LATENCY_BUDGET_MS}ms; network budget is measured separately)`,
   )
 
   // --- 3: onUpdate for note field changes -----------------------------------
