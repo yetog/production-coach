@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Music, Drum, Piano, Radio, Wifi, WifiOff, Link, RefreshCw } from 'lucide-react'
+import { Music, Drum, Piano, Radio, Wifi, WifiOff, Link } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { SessionState, DeviceInfo } from '@/types'
 
