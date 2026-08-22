@@ -59,10 +59,12 @@ describe("registerCommandHandler", () => {
     expect(chrome.sendMessage).toHaveBeenCalledWith(11, { type: PTT_EVENT })
   })
 
-  it("targets the app's real origins", () => {
+  it("targets the Audiotool tab and app origins", () => {
     // Must line up with the manifest's host_permissions / content_scripts
     // matches — a drift test enforces that alignment.
     expect(APP_URL_PATTERNS).toContain("https://zaylegend.com/*")
+    expect(APP_URL_PATTERNS).toContain("https://audiotool.com/*")
+    expect(APP_URL_PATTERNS).toContain("https://www.audiotool.com/*")
     expect(APP_URL_PATTERNS.some((p) => p.includes("localhost"))).toBe(true)
   })
 })

@@ -1,6 +1,6 @@
 # Dr. Zay Push-to-Talk (Chrome extension)
 
-Global keyboard shortcut to talk to Dr. Zay while the Audiotool window has focus
+Global keyboard shortcut and side panel to talk to Dr. Zay while the Audiotool window has focus
 — issue #55.
 
 ## Why an extension (and the one compromise)
@@ -21,11 +21,15 @@ both:
 ```
 Ctrl+Shift+Y
   -> background.js (service worker)         chrome.commands.onCommand
-     -> finds the Dr. Zay tab(s)            chrome.tabs.query
+     -> finds Audiotool tabs                chrome.tabs.query
      -> sends a toggle message              chrome.tabs.sendMessage
-        -> content.js (in the page)         chrome.runtime.onMessage
-           -> window event "drzay:ptt-toggle"
-              -> the app's useExtensionPtt hook toggles the mic
+        -> content.js (Audiotool page)      chrome.runtime.onMessage
+           -> page event "drzay:ptt-toggle"
+
+Side panel action
+  -> background context router              active tab/project id only
+     -> sidepanel.js                         embeds the shared Dr. Zay app
+        -> app iframe                        same chat/tool/plan/apply path
 ```
 
 The app side is already wired (`src/hooks/useExtensionPtt.ts`); with no extension
@@ -40,7 +44,9 @@ installed nothing dispatches the event and the app is unaffected.
    Ctrl+Shift+Y). Chrome will not let two extensions share a chord — rebind if
    it's taken.
 
-The extension targets `zaylegend.com`, `localhost` and `127.0.0.1`. To point it
+The extension targets Audiotool plus the Dr. Zay app origins. It requests only
+the `tabs` permission needed to read the active tab's project query parameter;
+it never reads page content. To point it
 at another origin, edit **both** `content_scripts.matches` and
 `host_permissions` in `manifest.json` **and** `APP_URL_PATTERNS` in
 `lib/background-core.js` (a test enforces they agree).
