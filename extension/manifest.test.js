@@ -64,3 +64,21 @@ describe("manifest.json", () => {
     expect(manifest.permissions).toContain("tabs")
   })
 })
+
+describe("icons", () => {
+  // Without an icons block Chrome falls back to a grey puzzle piece in the
+  // toolbar and chrome://extensions - the Dr. Zay art is the product's face.
+  it("declares Dr. Zay art at every size Chrome reads", () => {
+    for (const size of ["16", "32", "48", "128"]) {
+      expect(manifest.icons?.[size], `icons.${size} must be declared`).toBeTruthy()
+    }
+  })
+
+  it("ships every icon file the manifest points at", () => {
+    for (const path of Object.values(manifest.icons ?? {})) {
+      const png = readFileSync(join(here, path))
+      // PNG magic bytes - catches an empty or mislabeled file.
+      expect(png.subarray(0, 4).toString("hex"), `${path} must be a PNG`).toBe("89504e47")
+    }
+  })
+})
