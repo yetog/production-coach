@@ -6,6 +6,7 @@ import {
   type AgentSessionReport,
 } from '@/lib/agent-client'
 import { resolveApiBase } from '@/lib/api-base'
+import { projectFromLocation } from '@/lib/project-context'
 import type { DeviceInfo, SessionState } from '@/types'
 
 /**
@@ -75,7 +76,10 @@ export function useNexus() {
   /** The project URL/ID set by the user */
   const [projectUrl, setProjectUrlState] = useState<string>(() => {
     try {
-      return localStorage.getItem(STORAGE_KEY) ?? ''
+      const extensionProject = typeof window === 'undefined'
+        ? undefined
+        : projectFromLocation(window.location.search)
+      return extensionProject ?? localStorage.getItem(STORAGE_KEY) ?? ''
     } catch {
       return ''
     }
