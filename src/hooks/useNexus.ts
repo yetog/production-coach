@@ -2,12 +2,15 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   AgentApiError,
   createAgentClient,
+  type AgentApplyOutcome,
+  type AgentUndoOutcome,
   type AgentPlan,
   type AgentSessionReport,
 } from '@/lib/agent-client'
 import { resolveApiBase } from '@/lib/api-base'
 import { projectFromLocation } from '@/lib/project-context'
 import type { DeviceInfo, SessionState } from '@/types'
+import type { AgentPlanSummary } from './useApi'
 
 /**
  * Live session state, backed by the agent bridge (issue #23).
@@ -70,6 +73,9 @@ export function useNexus() {
   const [busy, setBusy] = useState(false)
   /** Detected arrangement sections. Not RegionInfo - see the note in refresh. */
   const [sections, setSections] = useState<AgentSessionReport['sections']>([])
+  const [sharedPlan, setSharedPlan] = useState<AgentPlan | undefined>()
+  const [sharedOutcome, setSharedOutcome] = useState<AgentApplyOutcome | null>(null)
+  const [sharedUndo, setSharedUndo] = useState<AgentUndoOutcome | null>(null)
   /** Guards against a refresh landing after the component has gone. */
   const alive = useRef(true)
 
@@ -147,7 +153,11 @@ export function useNexus() {
     setBusy(true)
     setError(null)
     try {
-      return await agent.plan(projectId || undefined, command)
+      const plan = await agent.plan(projectId || undefined, command)
+      setSharedPlan(plan)
+      setSharedOutcome(null)
+      setSharedUndo(null)
+      return plan
     } catch (caught) {
       setError(caught instanceof AgentApiError ? caught.message : 'Could not plan that command.')
       return null
@@ -166,6 +176,11 @@ export function useNexus() {
       setError(null)
       try {
         const outcome = await agent.apply(projectId || undefined, command, planId)
+        if (outcome !== null) {
+          setSharedOutcome(outcome)
+          setSharedPlan(outcome.plan)
+          setSharedUndo(null)
+        }
         await refresh()
         return outcome
       } catch (caught) {
@@ -184,6 +199,7 @@ export function useNexus() {
     setError(null)
     try {
       const outcome = await agent.undo(projectId || undefined)
+      if (outcome !== null) setSharedUndo(outcome)
       await refresh()
       return outcome
     } catch (caught) {
@@ -193,6 +209,16 @@ export function useNexus() {
       setBusy(false)
     }
   }, [projectId, refresh])
+
+  /** Record a plan created by Dr. Zay's typed chat loop for other producer UIs. */
+  const recordPlan = useCallback((plan: AgentPlanSummary) => {
+    setSharedPlan({
+      ...plan,
+      safety: plan.safety ?? 'Review this plan before applying it.',
+    })
+    setSharedOutcome(null)
+    setSharedUndo(null)
+  }, [])
 
   /**
    * Add a device by name, as suggested by the coach.
@@ -250,5 +276,9 @@ export function useNexus() {
     undoLast,
     addDevice,
     applyCommand,
+    recordPlan,
+    sharedPlan,
+    sharedOutcome,
+    sharedUndo,
   }
 }

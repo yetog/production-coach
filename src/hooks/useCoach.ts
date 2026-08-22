@@ -51,10 +51,12 @@ interface UseCoachOptions {
   onApplyPlan?: (command: string, planId: string) => Promise<unknown>
   /** Undo the last verified producer action through the same AgentService. */
   onUndo?: () => Promise<unknown>
+  /** Publish a typed chat plan to other producer clients in the same session. */
+  onPlan?: (plan: AgentPlanSummary) => void
   voiceEnabled?: boolean
 }
 
-export function useCoach({ project, session, onAddDevice, onApplyCommand, onApplyPlan, onUndo, voiceEnabled = false }: UseCoachOptions) {
+export function useCoach({ project, session, onAddDevice, onApplyCommand, onApplyPlan, onUndo, onPlan, voiceEnabled = false }: UseCoachOptions) {
   const { sendAgentChat, speak, isSpeaking, stopSpeaking, isLoading: apiLoading } = useApi()
 
   const actionFromPlan = (plan: AgentPlanSummary | undefined): CoachAction | undefined => {
@@ -144,6 +146,8 @@ export function useCoach({ project, session, onAddDevice, onApplyCommand, onAppl
         producerEvent: response.plan ? planEvent(response.plan) : undefined,
       }
 
+      if (response.plan !== undefined) onPlan?.(response.plan)
+
       setMessages(prev => [...prev, coachMessage])
 
       // Speak the response if voice is enabled
@@ -165,7 +169,7 @@ export function useCoach({ project, session, onAddDevice, onApplyCommand, onAppl
       setIsLoading(false)
       if (!voiceEnabled) setState('idle')
     }
-  }, [project, sendAgentChat, speak, session, voiceEnabled])
+  }, [onPlan, project, sendAgentChat, speak, session, voiceEnabled])
 
   // Send message to coach
   const sendMessage = useCallback(async (content: string) => {
@@ -209,6 +213,8 @@ export function useCoach({ project, session, onAddDevice, onApplyCommand, onAppl
         producerEvent: response.plan ? planEvent(response.plan) : undefined,
       }
 
+      if (response.plan !== undefined) onPlan?.(response.plan)
+
       setMessages(prev => [...prev, coachMessage])
 
       // Speak the response if voice is enabled
@@ -230,7 +236,7 @@ export function useCoach({ project, session, onAddDevice, onApplyCommand, onAppl
       setIsLoading(false)
       if (!voiceEnabled || !isSpeaking) setState('idle')
     }
-  }, [messages, goal, project, session, sendAgentChat, speak, voiceEnabled, isSpeaking])
+  }, [messages, goal, onPlan, project, session, sendAgentChat, speak, voiceEnabled, isSpeaking])
 
   // Apply an action — either a device add (#40) or an 808/musical move (#53).
   const applyAction = useCallback(async (action: CoachAction) => {

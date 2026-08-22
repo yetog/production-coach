@@ -20,6 +20,7 @@ export interface AgentPlanSummary {
   target: { section?: string; startBar: number; endBar: number; confidence: number }
   actions: Array<Record<string, unknown>>
   summary: string
+  safety?: string
   requiresConfirmation: boolean
   clarification?: string
 }
